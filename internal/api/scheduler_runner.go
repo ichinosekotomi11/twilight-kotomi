@@ -113,10 +113,6 @@ func (a *App) runSchedulerJob(r *http.Request, jobID string) (map[string]any, []
 		embyDisabled := 0
 		skippedProtected := 0
 		users := a.store().ListUsers()
-		invitedUIDs := map[int64]bool{}
-		for _, rel := range a.store().InviteRelations() {
-			invitedUIDs[rel.ChildUID] = true
-		}
 		for _, u := range users {
 			if err := r.Context().Err(); err != nil {
 				return map[string]any{"success": false, "terminated": true, "disabled": disabled, "emby_disabled": embyDisabled, "skipped_protected": skippedProtected}, []string{"job terminated"}, err
@@ -135,39 +131,15 @@ func (a *App) runSchedulerJob(r *http.Request, jobID string) (map[string]any, []
 				continue
 			}
 			if u.Active && u.ExpiredAt > 0 && u.ExpiredAt < now {
-				// For invited users (have invite relation), only disable Emby access
-				// but keep the account active so they can still log in and renew
-				isInvited := invitedUIDs[u.UID]
-				if isInvited {
-					sideCtx, sideCancel := schedulerSideEffectContext(r.Context())
-					// Only disable Emby, keep account active so the user
-					// can re-login (or the inviter can renew on their behalf)
-					if disabledRemote, err := a.disableRemoteEmbyForWebState(sideCtx, u); err == nil && disabledRemote {
-						embyDisabled++
-					}
-					// 即便保留 Active=true 让用户能重新登录续期，已经过期的
-					// 时刻必须立刻让现有会话失效——否则 stale cookie 在
-					// SessionTTL 内仍能访问受保护接口（包括非续期接口），
-					// 与 authenticateAPIKey 的 `!u.Active` / 过期兜底语义
-					// 不一致。续期成功后用户重新登录即可拿新 session。
-					a.sessions().DeleteUser(sideCtx, u.UID)
-					sideCancel()
-					disabled++
-				} else {
-					// Non-invited users: disable the whole account
-					updated, err := a.store().SetUserActiveAtomic(u.UID, false)
-					if err == nil {
-						sideCtx, sideCancel := schedulerSideEffectContext(r.Context())
-						if disabledRemote, err := a.disableRemoteEmbyForWebState(sideCtx, updated); err == nil && disabledRemote {
-							embyDisabled++
-						}
-						// 立即清除该用户的所有会话。否则 stale
-						// token 仍可访问受保护接口直到 SessionTTL 自然到期。
-						a.sessions().DeleteUser(sideCtx, updated.UID)
-						disabled++
-						sideCancel()
-					}
+				// ExpiredAt is the Emby entitlement deadline, not the Web account
+				// deadline. 30-day verification may disable remote Emby access,
+				// but must leave the panel account and existing sessions alone so
+				// users can still sign in, bind Telegram, check status and renew.
+				sideCtx, sideCancel := schedulerSideEffectContext(r.Context())
+				if disabledRemote, err := a.disableRemoteEmbyForWebState(sideCtx, u); err == nil && disabledRemote {
+					embyDisabled++
 				}
+				sideCancel()
 			}
 		}
 		return map[string]any{"success": true, "disabled": disabled, "emby_disabled": embyDisabled, "skipped_protected": skippedProtected}, []string{fmt.Sprintf("disabled %d expired users", disabled)}, nil

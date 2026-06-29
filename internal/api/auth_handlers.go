@@ -445,11 +445,13 @@ func (a *App) handleRegister(w http.ResponseWriter, r *http.Request, _ Params) {
 	// 配置列表才会在创建后被提升。默认不配置列表 = 无人是管理员。
 	role := store.RoleNormal
 	newUser := store.User{
-		Username:         username,
-		Email:            stringValue(payload, "email"),
-		PasswordHash:     passwordHash,
-		Role:             role,
-		ExpiredAt:        expiryFromDays(initialExpiryDays(*a.cfg()), time.Now()),
+		Username:     username,
+		Email:        stringValue(payload, "email"),
+		PasswordHash: passwordHash,
+		Role:         role,
+		// 网站账号本身不参与 30 天保号验证；30 天期限只在开通 / 绑定
+		// Emby 后由 applyInitialEmbyEntitlement 写入，用来控制 Emby 权限。
+		ExpiredAt:        permanentExpiryUnix,
 		TelegramID:       telegramID,
 		TelegramUsername: telegramUsername,
 	}

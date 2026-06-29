@@ -181,7 +181,7 @@ func TestAuthFlowWithoutCSRF(t *testing.T) {
 	}
 }
 
-func TestRegisterSetsThirtyDayExpiryForChineseUsername(t *testing.T) {
+func TestRegisterDoesNotSetWebAccountThirtyDayExpiryForChineseUsername(t *testing.T) {
 	app := newTestApp(t)
 
 	resp := doJSON(app, http.MethodPost, "/api/v1/users/register", `{"username":"测试用户","password":"Admin123456"}`, nil)
@@ -193,9 +193,8 @@ func TestRegisterSetsThirtyDayExpiryForChineseUsername(t *testing.T) {
 	if !ok {
 		t.Fatal("registered user not found")
 	}
-	wantExpiry := time.Now().AddDate(0, 0, 30).Unix()
-	if user.ExpiredAt < wantExpiry-120 || user.ExpiredAt > wantExpiry+120 {
-		t.Fatalf("register should grant 30-day expiry, got %d want ~%d", user.ExpiredAt, wantExpiry)
+	if !expiryIsPermanent(user.ExpiredAt) {
+		t.Fatalf("web registration should not grant 30-day expiry, got %d", user.ExpiredAt)
 	}
 }
 
@@ -587,13 +586,10 @@ func TestAPIKeyDisableAccountKillsSessions(t *testing.T) {
 	}
 }
 
-// TestCheckExpiredKillsInvitedUserSessions 锁定 R60-1 整改后的不变量：
-// check_expired job 处理 invited 用户时，即便保留 Active=true 让用户能重
-// 新登录续期，已经过期的时刻必须立刻让现有 cookie session 失效。否则
-// stale token 在 SessionTTL 内仍能访问受保护接口，与 R51-2 锁定的
-// "disable-account 必须立即踢 session" 语义不一致。non-invited 分支沿用
-// 原本就有的 sessions().DeleteUser，保留断言以防误把整段都拆掉。
-func TestCheckExpiredKillsInvitedUserSessions(t *testing.T) {
+// TestCheckExpiredKeepsWebAccountsAndSessions 锁定新的保号边界：
+// ExpiredAt 是 Emby 权限期限，不是网站账号期限。check_expired 可以禁用远端
+// Emby，但不能禁用 Web 账号，也不能清掉 Web session。
+func TestCheckExpiredKeepsWebAccountsAndSessions(t *testing.T) {
 	app := newTestApp(t)
 	ctx := context.Background()
 
@@ -641,24 +637,24 @@ func TestCheckExpiredKillsInvitedUserSessions(t *testing.T) {
 		t.Fatalf("runSchedulerJob check_expired returned err: %v", err)
 	}
 
-	// invited: Active 保留为 true（走续期路径），但 session 必须已被踢
+	// invited: Active 与 session 都保留，让用户仍能进入面板续期 / 绑定。
 	if u, ok := app.store().User(invited.UID); !ok {
 		t.Fatalf("invited user disappeared")
 	} else if !u.Active {
 		t.Fatalf("invited user Active should remain true (renewal path), got false")
 	}
-	if _, ok := app.sessions().Get(ctx, invitedToken); ok {
-		t.Fatalf("invited user session should be killed after expiry, but still alive")
+	if _, ok := app.sessions().Get(ctx, invitedToken); !ok {
+		t.Fatalf("invited user session should remain after Emby expiry")
 	}
 
-	// standalone: Active=false 且 session 也被踢（兜底确保原来逻辑没回退）
+	// standalone: 也只影响 Emby，不影响 Web。
 	if u, ok := app.store().User(standalone.UID); !ok {
 		t.Fatalf("standalone user disappeared")
-	} else if u.Active {
-		t.Fatalf("standalone user Active should be false after check_expired")
+	} else if !u.Active {
+		t.Fatalf("standalone user Active should remain true after check_expired")
 	}
-	if _, ok := app.sessions().Get(ctx, standaloneToken); ok {
-		t.Fatalf("standalone user session should be killed after expiry, but still alive")
+	if _, ok := app.sessions().Get(ctx, standaloneToken); !ok {
+		t.Fatalf("standalone user session should remain after Emby expiry")
 	}
 }
 
@@ -4343,7 +4339,7 @@ func TestDirectEmbyRegistrationRecordsRegcodeEquivalentGrant(t *testing.T) {
 	}
 	wantExpiry := time.Now().AddDate(0, 0, 30).Unix()
 	if updated.ExpiredAt < wantExpiry-120 || updated.ExpiredAt > wantExpiry+120 {
-		t.Fatalf("direct register should grant 30-day expiry, got %d want ~%d", updated.ExpiredAt, wantExpiry)
+		t.Fatalf("direct register should grant Emby expiry, got %d want ~%d", updated.ExpiredAt, wantExpiry)
 	}
 	if policyPosts == 0 {
 		t.Fatal("direct register did not sync Emby policy")
@@ -5843,9 +5839,9 @@ func TestCheckExpiredSkipsAdminAndWhitelist(t *testing.T) {
 		t.Fatalf("runSchedulerJob check_expired: %v", err)
 	}
 
-	// 普通用户：仍走原路径被禁。
-	if u, _ := app.store().User(normal.UID); u.Active {
-		t.Fatalf("non-admin expired user should be disabled, got Active=true")
+	// 普通用户：30 天验证只影响 Emby，不再禁用网站账号。
+	if u, _ := app.store().User(normal.UID); !u.Active {
+		t.Fatalf("non-admin expired user should keep web account active")
 	}
 
 	// admin / whitelist：必须保留 Active=true。
