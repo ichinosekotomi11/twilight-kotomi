@@ -7,10 +7,8 @@ const signinDateLayout = "2006-01-02"
 var signinResetLocation = time.FixedZone("Asia/Shanghai", 8*3600)
 
 func signinBusinessDate(now time.Time) string {
-	// 签到日界线按北京时间中午 12:00 计算：
-	// 例如 2026-06-29 11:59 仍属于 2026-06-28 的签到日，
-	// 2026-06-29 12:00 开始才进入 2026-06-29。
-	return now.In(signinResetLocation).Add(-12 * time.Hour).Format(signinDateLayout)
+	// 签到日界线按北京时间 24:00 计算，也就是北京时间自然日。
+	return now.In(signinResetLocation).Format(signinDateLayout)
 }
 
 func (s *Store) Signin(uid int64) Signin {
