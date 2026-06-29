@@ -1,0 +1,811 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes twilight-gradient-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.twilight-bg-layer {
+  transition:
+    filter 260ms ease,
+    opacity 260ms ease,
+    transform 260ms ease,
+    background-position 300ms ease,
+    background-color 320ms ease;
+  will-change: clip-path, filter, opacity, transform;
+}
+
+/* 深色模式切换时，主表面元素一同平滑过渡，避免突变 */
+.section-surface,
+.header-surface,
+.sidebar-surface,
+.profile-card,
+.premium-card,
+.glass-acrylic,
+.glass-frosted,
+.glass-liquid,
+.sidebar-link {
+  transition:
+    background-color 320ms ease,
+    border-color 320ms ease,
+    color 240ms ease,
+    backdrop-filter 320ms ease;
+}
+
+.twilight-bg-wipe {
+  clip-path: polygon(-25% 0%, -25% 0%, -45% 100%, -45% 100%);
+  transition: clip-path 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.twilight-bg-wipe-active {
+  clip-path: polygon(-5% 0%, 130% 0%, 105% 100%, -30% 100%);
+}
+
+/*
+ * prefers-reduced-motion 全仓兜底。
+ * WCAG 2.3.3 + 前庭障碍可访问性：
+ *   - 一刀切把 animation-duration / transition-duration 压到 0.01ms，
+ *     等价于"立即到达终点"，但保留布局副作用（不破坏依赖 transitionend 的逻辑）。
+ *   - scroll-behavior 强制 auto，避免平滑滚动引发眩晕。
+ *   - 自定义关键帧（twilight-gradient-flow / twilight-bg-wipe）显式禁用，
+ *     防止 background-position / clip-path 走完整动画路径。
+ *   - 单个组件如需特殊动效（loader 旋转），可在自身样式里再用
+ *     `@media (prefers-reduced-motion: no-preference)` 反向开启。
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .twilight-bg-layer,
+  .twilight-bg-wipe {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+@layer base {
+  :root {
+    --background: 222 20% 97%;
+    --foreground: 224 36% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 36% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 36% 10%;
+    --primary: 257 90% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 24% 93%;
+    --secondary-foreground: 224 28% 24%;
+    --muted: 220 20% 90%;
+    --muted-foreground: 220 12% 44%;
+    --accent: 262 70% 93%;
+    --accent-foreground: 258 85% 30%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    /*
+     * 语义状态令牌（success / warning / info）。
+     *
+     * 历史遗留代码用 bg-emerald-500 / text-amber-600 等直接 Tailwind 调色板，
+     * 新代码统一改用 bg-success / text-warning / border-info。
+     */
+    --success: 152 65% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 96% 10%;
+    --info: 211 92% 50%;
+    --info-foreground: 0 0% 100%;
+    --border: 220 19% 84%;
+    --input: 220 20% 88%;
+    --ring: 257 90% 58%;
+    --radius: 1rem;
+    --shell-glow: hsla(257, 92%, 60%, 0.16);
+  }
+
+  .dark {
+    --background: 228 24% 10%;
+    --foreground: 220 18% 96%;
+    --card: 228 22% 15%;
+    --card-foreground: 220 18% 96%;
+    --popover: 228 22% 15%;
+    --popover-foreground: 220 18% 96%;
+    --primary: 262 92% 67%;
+    --primary-foreground: 235 42% 12%;
+    --secondary: 228 16% 22%;
+    --secondary-foreground: 220 18% 98%;
+    --muted: 228 14% 28%;
+    --muted-foreground: 220 12% 90%;
+    --accent: 258 42% 24%;
+    --accent-foreground: 260 90% 90%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 60% 50%;
+    --success-foreground: 152 80% 8%;
+    --warning: 38 92% 60%;
+    --warning-foreground: 38 92% 10%;
+    --info: 211 92% 60%;
+    --info-foreground: 211 92% 10%;
+    --border: 230 18% 30%;
+    --input: 228 18% 28%;
+    --ring: 262 92% 67%;
+    --shell-glow: hsla(262, 92%, 67%, 0.14);
+  }
+
+  * { @apply border-border; }
+
+  html,
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    @apply antialiased;
+    min-width: 0;
+    color-scheme: light;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+    background-image:
+      radial-gradient(circle at 12% 8%, var(--shell-glow), transparent 28%),
+      radial-gradient(circle at 86% 90%, var(--shell-glow), transparent 25%);
+    background-attachment: fixed;
+    transition: background-color 320ms ease, color 240ms ease;
+  }
+
+  :lang(zh-Hans), :lang(zh-Hant) {
+    word-break: keep-all;
+    line-height: 1.6;
+  }
+
+  :lang(en-US) {
+    word-break: break-word;
+    line-height: 1.5;
+  }
+
+  .dark body { color-scheme: dark; }
+}
+
+@layer utilities {
+  .app-shell {
+    position: relative;
+    isolation: isolate;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  .shell-glow {
+    position: fixed;
+    height: 360px;
+    width: 360px;
+    border-radius: 9999px;
+    filter: blur(80px);
+    background: var(--shell-glow);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .shell-glow-left {
+    left: -120px;
+    top: -80px;
+  }
+
+  .shell-glow-right {
+    bottom: -120px;
+    right: -80px;
+  }
+
+  /* Auth page text: multi-layer shadow ensures readability on custom background images */
+  .auth-card-text {
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.3),
+      0 0px 8px rgba(0, 0, 0, 0.12);
+  }
+
+  /* When a custom background is present, strengthen card contrast */
+  .auth-has-bg .auth-card-inner {
+    --tw-bg-opacity: 0.88;
+    box-shadow:
+      0 0 0 1px hsl(var(--border) / 0.5),
+      0 8px 32px rgba(0, 0, 0, 0.12);
+  }
+
+  .dark .auth-has-bg .auth-card-inner {
+    --tw-bg-opacity: 0.85;
+    box-shadow:
+      0 0 0 1px hsl(var(--border) / 0.6),
+      0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .auth-shell {
+    background-position: center center;
+  }
+
+  @media (orientation: portrait) {
+    .auth-shell {
+      background-position: center center;
+    }
+  }
+
+  .auth-panel {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 100dvh;
+    margin-left: 0;
+    overflow-y: auto;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-left: 0;
+    box-shadow: none;
+  }
+
+  @media (min-width: 1024px) {
+    .auth-panel {
+      width: min(44vw, 560px);
+      margin-left: auto;
+      margin-right: clamp(2rem, 6vw, 7rem);
+    }
+  }
+
+  /* Keeps auth forms floating directly on the full-screen background. */
+  .auth-panel-inner {
+    margin: auto;
+    width: 100%;
+    max-width: 420px;
+    padding: 2.5rem 1.25rem;
+  }
+
+  @media (min-width: 640px) {
+    .auth-panel-inner {
+      padding: 3rem 2rem;
+    }
+  }
+
+  /* Step progress dots for the register wizard. */
+  .auth-step-dot {
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: hsl(var(--muted-foreground) / 0.35);
+    transition: width 240ms ease, background-color 240ms ease;
+    width: 0.5rem;
+  }
+
+  .auth-step-dot-active {
+    width: 1.5rem;
+    background: hsl(var(--foreground));
+  }
+
+  .auth-step-dot-done {
+    background: hsl(var(--foreground) / 0.7);
+  }
+
+  .auth-ios-glass {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.46);
+    background: rgba(255, 255, 255, 0.006);
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.72),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.18),
+      inset 10px 0 18px rgba(255, 255, 255, 0.045),
+      inset -10px 0 18px rgba(20, 28, 55, 0.045),
+      0 8px 22px rgba(20, 24, 40, 0.10),
+      0 0 0 1px rgba(20, 24, 40, 0.10);
+    backdrop-filter: blur(1.3px) saturate(1.18) contrast(1.08);
+    -webkit-backdrop-filter: blur(1.3px) saturate(1.18) contrast(1.08);
+  }
+
+  .auth-ios-glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at 18% 14%, rgba(255, 255, 255, 0.56), transparent 18%),
+      radial-gradient(ellipse at 84% 14%, rgba(255, 255, 255, 0.20), transparent 22%),
+      radial-gradient(ellipse at 46% 112%, rgba(255, 255, 255, 0.12), transparent 28%);
+    opacity: 0.44;
+    mix-blend-mode: screen;
+  }
+
+  .auth-ios-glass::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        180deg,
+        rgba(255,255,255,0.22) 0%,
+        rgba(255,255,255,0.06) 34%,
+        rgba(255,255,255,0.00) 72%
+      ),
+      linear-gradient(
+        90deg,
+        rgba(255,255,255,0.18) 0%,
+        rgba(255,255,255,0.00) 18%,
+        rgba(255,255,255,0.00) 82%,
+        rgba(18,24,44,0.10) 100%
+      );
+    opacity: 0.62;
+  }
+
+  .auth-ios-input-wrap {
+    height: 52px;
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+  }
+
+  .auth-ios-input {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    outline: none;
+    color: #241f4f;
+    font-size: 15px;
+    font-weight: 600;
+    text-shadow:
+      0 1px 1px rgba(255, 255, 255, 0.72),
+      0 0 8px rgba(255, 255, 255, 0.44);
+  }
+
+  .auth-ios-input::placeholder {
+    color: rgba(36, 31, 79, 0.54);
+  }
+
+  .auth-ios-button {
+    height: 52px;
+    border-radius: 999px;
+    color: #241f4f;
+    font-size: 15px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.008);
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.64),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.16),
+      inset 10px 0 18px rgba(255, 255, 255, 0.04),
+      inset -10px 0 18px rgba(20, 28, 55, 0.04),
+      0 12px 30px rgba(20, 24, 40, 0.12),
+      0 0 0 1px rgba(20, 24, 40, 0.08);
+    text-shadow:
+      0 1px 1px rgba(255, 255, 255, 0.78),
+      0 0 10px rgba(255, 255, 255, 0.50);
+    transition: all 0.25s ease;
+  }
+
+  .auth-ios-button:hover {
+    background: rgba(255, 255, 255, 0.018);
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.76),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.18),
+      inset 10px 0 18px rgba(255, 255, 255, 0.05),
+      inset -10px 0 18px rgba(20, 28, 55, 0.05),
+      0 14px 34px rgba(20, 24, 40, 0.14),
+      0 0 0 1px rgba(20, 24, 40, 0.09);
+  }
+
+  .auth-ios-button:active {
+    transform: scale(0.985);
+  }
+
+  .auth-ios-link-button {
+    height: 44px;
+    padding: 0 18px;
+    border-radius: 999px;
+    color: #2f2a56;
+    font-weight: 600;
+    text-shadow:
+      0 1px 1px rgba(255, 255, 255, 0.72),
+      0 0 8px rgba(255, 255, 255, 0.44);
+  }
+
+  .auth-ios-label {
+    color: #241f4f;
+    font-weight: 700;
+    text-shadow: 0 1px 6px rgba(255, 255, 255, 0.65);
+  }
+
+  .auth-ios-text {
+    color: rgba(47, 42, 86, 0.86);
+    text-shadow: 0 1px 6px rgba(255, 255, 255, 0.55);
+  }
+
+  .auth-ios-tab-trigger {
+    border: 1px solid transparent;
+    background: transparent;
+    color: rgba(36, 31, 79, 0.72);
+    font-weight: 600;
+    text-shadow:
+      0 1px 1px rgba(255, 255, 255, 0.72),
+      0 0 8px rgba(255, 255, 255, 0.44);
+  }
+
+  .auth-ios-tab-trigger[data-state="active"] {
+    background: rgba(255, 255, 255, 0.014);
+    color: #241f4f;
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.62),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.14),
+      0 8px 20px rgba(20, 24, 40, 0.10);
+  }
+
+  .auth-ios-tab-trigger[data-state="inactive"]:hover {
+    color: #241f4f;
+  }
+
+  @supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+    .auth-ios-glass {
+      background:
+        linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.08) 0%,
+          rgba(255, 255, 255, 0.035) 28%,
+          rgba(255, 255, 255, 0.015) 100%
+        ),
+        rgba(255, 255, 255, 0.025);
+    }
+  }
+
+  .section-surface {
+    min-height: calc(100dvh - 120px);
+    min-width: 0;
+    max-width: 100%;
+    border-radius: calc(var(--radius) + 0.25rem);
+    border: 1px solid hsl(var(--border) / 0.7);
+    background: hsl(var(--card) / 0.72);
+    backdrop-filter: blur(var(--tw-glass-blur, 16px));
+    padding: 0.85rem;
+  }
+
+  @media (min-width: 640px) {
+    .section-surface {
+      padding: 1.25rem;
+      border-radius: 1.5rem;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .section-surface {
+      min-height: calc(100dvh - 96px);
+      border-radius: 1rem;
+      padding: 0.65rem;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .section-surface {
+      padding: 1.5rem;
+    }
+  }
+
+  /* 防止任何长字符串横向溢出导致整页可滚动 */
+  .section-surface,
+  .premium-card {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .header-surface {
+    display: flex;
+    min-width: 0;
+    min-height: 68px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-radius: 1rem;
+    border: 1px solid hsl(var(--border) / 0.7);
+    background: hsl(var(--card) / 0.7);
+    padding: 0.75rem 1rem;
+    backdrop-filter: blur(var(--tw-glass-blur, 14px));
+  }
+
+  @media (max-width: 639px) {
+    .header-surface {
+      min-height: 60px;
+      padding: 0.65rem 0.75rem;
+    }
+  }
+
+  .sidebar-surface {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+    border: 1px solid hsl(var(--border) / 0.75);
+    border-radius: 1.4rem;
+    background: hsl(var(--card) / 0.74);
+    backdrop-filter: blur(var(--tw-glass-blur, 18px));
+    padding: 0.95rem;
+  }
+
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border: 1px solid hsl(var(--border) / 0.55);
+    border-radius: 1rem;
+    padding: 0.75rem;
+  }
+
+  .brand-logo {
+    display: grid;
+    place-items: center;
+    height: 2.25rem;
+    width: 2.25rem;
+    border-radius: 0.75rem;
+    background: hsl(var(--primary) / 0.18);
+    color: hsl(var(--primary));
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .sidebar-nav {
+    margin-top: 1rem;
+    flex: 1;
+    overflow: auto;
+  }
+
+  .sidebar-label {
+    margin-bottom: 0.5rem;
+    padding: 0 0.4rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .sidebar-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    border: 1px solid transparent;
+    border-radius: 0.85rem;
+    padding: 0.58rem 0.72rem;
+    margin-bottom: 0.4rem;
+    color: hsl(var(--muted-foreground));
+    transition: all 180ms ease;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .sidebar-link span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar-link:hover {
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border) / 0.6);
+  }
+
+  .sidebar-link-active {
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border));
+  }
+
+  .sidebar-active-bg {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: hsl(var(--accent) / 0.72);
+    box-shadow: inset 0 0 0 1px hsl(var(--border) / 0.8);
+    z-index: 0;
+  }
+
+  .sidebar-dot {
+    position: absolute;
+    right: 0.45rem;
+    height: 0.34rem;
+    width: 0.34rem;
+    border-radius: 9999px;
+    background: hsl(var(--primary));
+    z-index: 10;
+  }
+
+  .sidebar-footer {
+    margin-top: 0.6rem;
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .profile-card {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    border: 1px solid hsl(var(--border) / 0.7);
+    border-radius: 0.9rem;
+    padding: 0.55rem;
+    background: hsl(var(--secondary) / 0.6);
+  }
+
+  .premium-card,
+  .glass-acrylic,
+  .glass-frosted,
+  .glass-liquid {
+    min-width: 0;
+    max-width: 100%;
+    border: 1px solid hsl(var(--border) / 0.7);
+    border-radius: 1.25rem;
+    background: hsl(var(--card) / 0.68);
+    backdrop-filter: blur(12px);
+    transition: background 200ms ease, border-color 200ms ease, backdrop-filter 200ms ease;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.45);
+    border-radius: 9999px;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .i18n-stable-tabs [role="tab"] {
+    min-width: 0;
+    min-height: 2.5rem;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
+  }
+
+  .i18n-stable-tabs [role="tab"] svg {
+    flex-shrink: 0;
+  }
+
+  .admin-section-surface {
+    background: hsl(var(--card) / 0.78);
+  }
+
+  .admin-section-surface > * {
+    width: 100%;
+    max-width: 1560px;
+    margin-inline: auto;
+  }
+
+  .admin-section-surface :where(h1) {
+    line-height: 1.15;
+    letter-spacing: 0;
+  }
+
+  .admin-section-surface :where(h1 + p) {
+    max-width: 72rem;
+  }
+
+  .admin-section-surface :where(table) {
+    min-width: 100%;
+  }
+
+  .admin-section-surface :where(th, td) {
+    vertical-align: middle;
+  }
+
+  .admin-section-surface :where(.overflow-x-auto) {
+    border-radius: calc(var(--radius) * 0.85);
+  }
+
+  .admin-section-surface :where(.grid) {
+    min-width: 0;
+  }
+
+  .admin-section-surface :where(button, a) {
+    min-width: 0;
+  }
+
+  .admin-section-surface :where(.truncate) {
+    min-width: 0;
+  }
+
+  @media (max-width: 639px) {
+    .admin-section-surface :where(.space-y-6 > :not([hidden]) ~ :not([hidden])) {
+      margin-top: 1rem;
+    }
+
+    .admin-section-surface :where(.space-y-8 > :not([hidden]) ~ :not([hidden])) {
+      margin-top: 1.25rem;
+    }
+
+    .admin-section-surface :where(h1) {
+      font-size: 1.35rem;
+    }
+  }
+
+  .tw-reduce-motion *,
+  .tw-reduce-motion *::before,
+  .tw-reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.24);
+    color: hsl(var(--foreground));
+  }
+
+  .hide-dev-tools ~ #nextjs-portal,
+  .hide-dev-tools ~ [data-nextjs-toast-wrapper],
+  .hide-dev-tools ~ [data-nextjs-dev-indicator] {
+    display: none !important;
+  }
+
+  .theme-color-input {
+    overflow: hidden;
+  }
+
+  .theme-color-input::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+
+  .theme-color-input::-webkit-color-swatch {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .theme-color-input::-moz-color-swatch {
+    border: 0;
+    border-radius: 0;
+  }
+
+  /* Compact mode: reduce spacing when .tw-compact is set on <html> */
+  .tw-compact .section-surface { padding: 0.65rem; }
+  .tw-compact .section-surface { min-height: calc(100dvh - 100px); }
+
+  .tw-compact .header-surface { min-height: 52px; padding: 0.5rem 0.75rem; }
+
+  .tw-compact .sidebar-surface { padding: 0.65rem; }
+  .tw-compact .sidebar-link { padding: 0.4rem 0.6rem; margin-bottom: 0.2rem; gap: 0.45rem; }
+  .tw-compact .sidebar-nav { margin-top: 0.5rem; }
+  .tw-compact .sidebar-brand { padding: 0.5rem; gap: 0.5rem; }
+  .tw-compact .sidebar-footer { gap: 0.4rem; }
+
+  .tw-compact .profile-card { padding: 0.4rem; gap: 0.4rem; }
+
+  .tw-compact .glass-acrylic,
+  .tw-compact .glass-frosted,
+  .tw-compact .glass-liquid { border-radius: 1rem; }
+
+  @media (min-width: 640px) {
+    .tw-compact .section-surface { padding: 1rem; }
+  }
+
+  @media (min-width: 768px) {
+    .tw-compact .section-surface { padding: 1.25rem; }
+  }
+}

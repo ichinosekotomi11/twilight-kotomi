@@ -1,0 +1,34 @@
+[Unit]
+Description=Twilight Go API
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=root
+Group=root
+WorkingDirectory=/root/Twilight
+ExecStart=/root/Twilight/bin/twilight api --host 127.0.0.1 --port 5000 --config config.toml
+
+EnvironmentFile=-/root/Twilight/.env
+
+LimitNOFILE=65535
+LimitNPROC=4096
+MemoryMax=1G
+MemoryHigh=768M
+
+Restart=always
+RestartSec=5
+
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=twilight
+
+[Install]
+WantedBy=multi-user.target

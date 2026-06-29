@@ -1,0 +1,249 @@
+# ============================================================
+# Twilight .gitignore
+# ============================================================
+# 原则：
+#   - 构建产物、运行时数据、本地配置和私密文件不上库
+#   - 项目必需的模板文件 (.example) 和部署脚本保留
+#   - Dockerfile / docker-compose.yml 作为正式部署方案保留，仅本地覆写排除
+# ============================================================
+
+# ─── IDE & Editor ───
+.vscode/
+.idea/
+.vs/
+*.swp
+*.swo
+*~
+*.iml
+*.suo
+*.user
+*.sln.docstates
+.history/
+.cursorignore
+.cursorindexingignore
+.cursorrules
+.cursor/
+
+# ─── Environment Files ───
+.env
+.env.*
+!.env.example
+!.env.*.example
+.envrc
+
+# ─── Local / Secret Configuration ───
+# 本地 tom 覆写（任意层级）
+**/*.local.toml
+**/*.private.toml
+**/*.secrets.toml
+# 根目录配置备份
+config.toml
+config.toml.*
+!config.production.toml
+# 1Panel 部署配置
+1panel*.env
+1panel*.toml
+1panel*.json
+1panel*.yaml
+1panel*.yml
+1panel*.conf
+.1panel/
+1panel/
+
+# ─── Docker ───
+# 本地用户覆写（Docker Compose 标准机制）
+docker-compose.override.yml
+# 本地自定义 Dockerfile
+Dockerfile.local
+Dockerfile.*.local
+# BuildKit 缓存
+.docker/
+
+# ─── Runtime Data ───
+# 数据库
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-*
+/db/
+database.db
+# 备份
+config_backups/
+backups/
+# 上传 & 临时
+uploads/
+/tmp/
+temp/
+# 进程 & 缓存
+runtime/
+data/
+.cache/
+*.tmp
+*.temp
+*.pid
+
+# ─── Logs ───
+*.log
+/logs/
+api_error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─── Frontend (Next.js / pnpm / Turbopack) ───
+node_modules/
+.pnp
+.pnp.js
+.turbo/
+.next/
+out/
+.eslintcache
+*.tsbuildinfo
+**/tsconfig.tsbuildinfo
+.vite/
+.parcel-cache/
+.opennextjs/
+.open-next/
+.wrangler/
+.vercel/
+.netlify/
+# 测试
+coverage/
+coverage.xml
+*.lcov
+.nyc_output/
+.coverage
+junit.xml
+test-report.xml
+playwright-report/
+test-results/
+storybook-static/
+*.sarif
+# 类型锁文件
+webui/.next-env.d.ts.lock
+*.next-env.d.ts.lock
+# Lock 文件统一为 pnpm-lock.yaml，禁止 npm/yarn lock 再生成
+webui/package-lock.json
+webui/yarn.lock
+.pnpm-store/
+
+# ─── Go ───
+# 构建输出
+/bin/
+/twilight
+/twilight.exe
+/twilight-linux-amd64
+dist/
+build/
+# 测试 & 分析
+*.test
+coverage.out
+coverage.html
+*.coverprofile
+*.prof
+*.pprof
+# 工具配置
+.air.toml
+# Go workspace（本地多模块开发用）
+go.work
+go.work.sum
+# Delve 调试器生成的二进制
+__debug_bin*
+# GOCACHE 本地目录（如果配置在项目内）
+.gocache/
+
+# ─── Python (legacy) ───
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.python-version
+
+# ─── OS Files ───
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+*.lnk
+desktop.ini
+
+# ─── Local branding assets ───
+# Keep private site logos/backgrounds out of public repositories. Configure
+# server_icon/auth_background_url in config.toml or env on the deployment host.
+/webui/public/brand/
+*.bat
+*.cmd
+*.ps1
+
+# ─── Keys & Credentials ───
+*.pem
+*.key
+*.key.pub
+*.p12
+*.pfx
+*.cer
+*.crt
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+id_ecdsa
+id_ecdsa.*
+*.gpg
+*.pgp
+
+# ─── Backup & Patch Artifacts ───
+*.backup
+*.orig
+*.rej
+*.patch
+*.bak
+*.old
+
+# ─── Project-specific Local Files ───
+OPTIMIZATION_SUMMARY.md
+DEPLOY_LOCAL.txt
+/tests
+/.claude
+/memory/
+.notes/
+.aider*
+.codex/
+.continue/
+.copilot/
+routes.txt
+routes.json
+openapi.json
+schema.dump
+sample/
+samples/
+fixtures/local/
+/.github/copilot-instructions.local.md
+opencode.json
+docs/AUDIT_REPORT.md
+.narrafork/
+.worktrees/
+setup-deploy.sh
+
+# ─── Cloud / Infrastructure ───
+# Terraform / Pulumi 本地状态
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+.pulumi/
+# Kubernetes 本地配置
+kubeconfig*

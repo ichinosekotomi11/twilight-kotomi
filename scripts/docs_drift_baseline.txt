@@ -1,0 +1,16 @@
+# scripts/docs_drift_baseline.txt
+#
+# 这份文件是 routes.go 与 docs/*.md 之间"已知未文档化"的允许列表。
+# scripts/check_docs_drift.go 在 CI 跑时：
+#   - 新增的未文档化路由不会被 grandfather，必须先补 docs 或者在 PR 里
+#     显式把那条 (METHOD PATH) 添加到这份文件，使其作为可审计的 diff 出现。
+#   - 这里残留的、已经被文档化或被删除的路由也会被 lint 报错，强迫 baseline
+#     单调收敛——只能变小，不会僵化成永久噪音。
+#
+# 格式：每行 "METHOD PATH"，# 开头是注释。空行忽略。METHOD 用大写，PATH 走
+# {param} 风格（与 docs 习惯一致；routes.go 里的 :param 由 lint 自动归一化）。
+#
+# 长期目标：把这份文件清空。每次接入新功能时顺手补一条 docs 即可。
+#
+# 2026-06：文档重构后，全部 265 条路由已在 docs/reference/api-index.md 完整收录，
+# baseline 已清空。新增未文档化路由请补 docs 或在此显式登记。

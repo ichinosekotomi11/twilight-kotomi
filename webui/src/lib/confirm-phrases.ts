@@ -1,0 +1,17 @@
+export const confirmPhrases = {
+  batchEnableUsers: "BATCH_ENABLE_USERS",
+  batchDisableUsers: "BATCH_DISABLE_USERS",
+  batchDeleteUsers: "BATCH_DELETE_USERS",
+  batchRenewUsers: "BATCH_RENEW_USERS",
+  batchPromoteWhitelist: "BATCH_PROMOTE_WHITELIST",
+  batchLockEmbyUnbind: "BATCH_LOCK_EMBY_UNBIND",
+  batchClearEmbyGrant: "BATCH_CLEAR_EMBY_GRANT",
+  batchEmbyEnable: "BATCH_EMBY_ENABLE",
+  batchEmbyDisable: "BATCH_EMBY_DISABLE",
+  batchDeleteRegcodes: "BATCH_DELETE_REGCODES",
+  cleanupInvalidUsers: "CLEANUP_INVALID_USERS",
+  clearAllUserEmails: "CLEAR_ALL_EMAILS",
+  clearViolations: "CLEAR_VIOLATIONS",
+  clearAuditLogs: "CLEAR_AUDIT_LOGS",
+  pruneAuditLogs: "PRUNE_AUDIT_LOGS",
+} as const;

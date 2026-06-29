@@ -1,0 +1,101 @@
+# Dependabot 配置 - 自动跟踪后端 / 前端 / GitHub Actions 依赖
+version: 2
+updates:
+  # 后端 Go 模块
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - go
+    commit-message:
+      prefix: "deps(go)"
+    groups:
+      go-minor:
+        update-types:
+          - minor
+          - patch
+
+  # 前端 npm (pnpm 兼容 dependabot npm 生态)
+  - package-ecosystem: npm
+    directory: /webui
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:30"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - frontend
+    commit-message:
+      prefix: "deps(webui)"
+    groups:
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+      typescript-eslint:
+        patterns:
+          - "@typescript-eslint/*"
+          - "eslint*"
+      types:
+        patterns:
+          - "@types/*"
+      next-react:
+        patterns:
+          - "next"
+          - "next-themes"
+          - "react"
+          - "react-dom"
+          - "@opennextjs/*"
+    ignore:
+      # 主版本升级容易出 break，单独人工 review，不走自动 PR
+      - dependency-name: "next"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "react"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "react-dom"
+        update-types:
+          - "version-update:semver-major"
+      # eslint v9 起强制 flat config（eslint.config.js），并且 eslint-config-next
+      # 跟着 Next 主线大版本同步跳号。这两个 major 升级需要重写 lint 配置 +
+      # 验证 next 自带规则集，不适合走自动合，先 ignore，需要时单独 PR。
+      - dependency-name: "eslint"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "eslint-config-next"
+        update-types:
+          - "version-update:semver-major"
+      # Tailwind v4 切了 Oxide 引擎、配置改成 CSS-first、PostCSS 插件迁到
+      # `@tailwindcss/postcss`，默认主题值（shadow-sm → shadow-xs 等）也变。
+      # tailwind-merge v3 起只支持 Tailwind v4，必须跟 tailwindcss 一起升。
+      # 整个迁移要动 tailwind.config.ts / postcss.config.mjs / globals.css /
+      # tailwindcss-animate → tw-animate-css 替换 + 视觉回归，单独人工 PR。
+      - dependency-name: "tailwindcss"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "tailwind-merge"
+        update-types:
+          - "version-update:semver-major"
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "deps(actions)"

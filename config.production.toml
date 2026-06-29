@@ -1,0 +1,526 @@
+# ============================================================
+#  Twilight 生产环境配置模板
+#  ------------------------------------------------------------
+#  使用方法：复制此文件为 config.toml，再按真实环境修改。
+#  主配置文件固定为运行目录下的 config.toml；--config 只能指向同一个文件。
+#  为避免特殊部署环境误读其它文件，TWILIGHT_CONFIG_FILE 不再参与默认配置路径选择。
+#  配置文件加载完成后，TWILIGHT_* 环境变量仍会覆盖对应配置字段。
+#  环境变量命名：TWILIGHT_{SECTION}_{KEY}，例：TWILIGHT_GLOBAL_SERVER_NAME。
+#  程序启动时会自动备份 config.toml 到 config_backups/ 目录，
+#  并把代码里新增但 toml 没有的配置项写回，无需手工补齐。
+# ============================================================
+
+# ───────── 全局 ─────────
+[Global]
+# 前端站点名称（标题栏/侧边栏）
+server_name = "Twilight"
+# 是否输出运行日志
+logging = true
+# 日志级别：10=DEBUG / 20=INFO / 30=WARNING / 40=ERROR
+log_level = "info"
+# 后台实时日志保留行数，配置热重载后立即生效
+runtime_log_limit = 5000
+# 是否输出 SQLAlchemy ORM 日志（极其啰嗦，调试时再开）
+sqlalchemy_log = false
+# 出站 HTTP 请求失败时的最大重试次数
+max_retry = 3
+# JSON 状态、备份和迁移文件目录（绝对或相对路径，相对则相对项目根）
+databases_dir = "db"
+# Redis 连接串；强烈建议生产环境配置 Redis。
+# 用途：会话缓存（快速读取）、速率限制（分布式计数）。
+# 即使配置了 Redis，会话仍会持久化到 PostgreSQL，确保 Redis/进程重启后自动恢复。
+# 格式：redis://[:password@]host:port/db
+# 示例（无密码）：redis://127.0.0.1:6379/0
+# 示例（有密码）：redis://:your_redis_password@127.0.0.1:6379/0
+# 示例（远程+密码）：redis://:StrongPass123@192.168.1.100:6379/0
+# 示例（TLS 加密）：rediss://:password@redis.example.com:6380/0
+# 留空时使用进程内内存（会话仍通过 PostgreSQL 持久化，但速率限制重启后重置）
+redis_url = ""
+# 是否启用 Telegram Bot（关闭时所有 /tg 相关功能直接拒绝）
+telegram_mode = false
+# 是否强制所有用户绑定 Telegram 才能登录/注册
+force_bind_telegram = false
+# 站点图标 HTTPS URL 或本地路径；留空使用内置图标（支持环境变量 TWILIGHT_SERVER_ICON）
+server_icon = ""
+# 登录/注册页背景图片 URL；上传后自动写入 /system/auth-background（支持环境变量 TWILIGHT_AUTH_BACKGROUND_URL）
+auth_background_url = ""
+# Bangumi 全局 API Token（可选；点格子不会把它作为用户兜底 Token）
+bangumi_token = ""
+# Bangumi API 地址（自建反代时可改）
+bangumi_api_url = "https://api.bgm.tv"
+# Bangumi App ID（OAuth，可选）
+bangumi_app_id = ""
+# TMDB API Key v3（https://www.themoviedb.org/settings/api）
+tmdb_api_key = ""
+# TMDB API 地址（如有镜像可改）
+tmdb_api_url = "https://api.themoviedb.org/3"
+# TMDB 图片 CDN
+tmdb_image_url = "https://image.tmdb.org/t/p"
+
+# ───────── 隐藏管理员配置 ─────────
+# 只能由服务器真实管理员直接编辑 config.toml / config.production.toml。
+# Web 配置管理页不会显示这些字段，也不会允许通过网页保存、备份恢复来修改这些字段。
+# 程序启动、配置热重载和命中配置的新注册用户都会自动提升为系统管理员并启用账号。
+# 可二选一或同时填写：
+# [Admin]
+# uids = [1, 2]
+# usernames = ["admin", "owner"]
+# 兼容旧写法：
+# admin_uids = [1, 2]
+# admin_usernames = ["admin", "owner"]
+#
+# 网页初始化向导必须显式临时开启。首次部署时可在任意结构块写入：
+# setup_mode = true
+# 或 SetupMode = true
+# 完成初始化后，后端会在写回主配置时移除该标记；普通网页配置管理不会保留它。
+
+# ───────── 数据库 ─────────
+[Database]
+# 存储后端：
+#   postgres = 默认 PostgreSQL 后端，适合生产和长期运行
+#   json     = Go JSON 状态文件，兼容原 Go 状态存储，仅建议迁移/小型部署使用
+# 当 driver=postgres 且目标数据库不存在时，后端会尝试用同一用户连接 postgres/template1
+# 维护库并执行 CREATE DATABASE；该用户需要 CREATEDB 权限，否则会明确报错。
+driver = "postgres"
+# Go JSON 状态文件路径；留空时使用 <databases_dir>/twilight_go_state.json。
+state_file = ""
+# 完整 PostgreSQL DSN；填写后优先于下面分项配置。
+# 例：postgres://twilight:CHANGE_ME@127.0.0.1:5432/twilight?sslmode=disable
+url = ""
+# 数据库备份目录；留空时使用 <databases_dir>/backups
+backup_dir = ""
+# 数据库迁移面板和迁移 API 默认关闭；需要迁移时临时改为 true，完成后建议关闭
+migration_panel_enabled = false
+# PostgreSQL 分项配置；当 url 留空且 driver=postgres 时使用这些字段拼接 DSN。
+postgres_host = "127.0.0.1"
+postgres_port = 5432
+postgres_user = "twilight"
+postgres_password = ""
+postgres_database = "twilight"
+# 本机/内网可用 disable；公网或云数据库建议 require / verify-full，并正确配置证书。
+postgres_sslmode = "disable"
+# 连接池。1Panel/低配机器建议保持较小；独立 PostgreSQL 可按资源调高。
+postgres_max_open_conns = 8
+postgres_max_idle_conns = 4
+
+# ───────── Emby ─────────
+[Emby]
+# Emby/Jellyfin 服务器地址（后端访问，跟前端用户访问的可以不同）
+emby_url = "http://127.0.0.1:8096/"
+# Emby API Token（管理后台 → 高级 → API 密钥）
+emby_token = ""
+# 备用：API Token 失效时用用户名/密码鉴权
+emby_username = ""
+emby_password = ""
+# 普通用户可见的播放线路：格式 "名称 : URL"
+emby_url_list = [
+  "直连 : http://your-server:8096/",
+]
+# 白名单 / 管理员专属线路
+emby_url_list_for_whitelist = [
+  "直连 : http://your-server:8096/",
+]
+
+# ───────── Telegram Bot ─────────
+[Telegram]
+# Telegram Bot API 基础地址（私有部署时可改，比如 https://my-tg-proxy/bot）
+telegram_api_url = "https://api.telegram.org/bot"
+# Bot Token（@BotFather）
+bot_token = ""
+# 管理员 Telegram ID 列表（数字）；Bot 内 /admin 命令仅向这些 ID 开放
+admin_id = []
+# 群组列表：可填数字 ID（如 -1001234567890）或 @用户名
+group_id = []
+# 频道列表：同上
+channel_id = []
+# 是否强制订阅指定群/频道才能使用（按 Bot 校验）
+force_subscribe = false
+# 是否启用完整内联面板（关闭后仅保留 /help /bind /me）
+enable_tg_panel = false
+# /twguser 群组用户面板模板；留空使用内置默认。完整占位符说明见后台配置页。
+group_user_panel_template = ""
+# 强制要求绑定/已绑定用户保持在群组内；退群会被自动禁用并同步 Emby
+require_group_membership = false
+# 上面开启时的定时巡检间隔（分钟）
+group_check_interval_minutes = 30
+# 群组巡检 get_chat_member 并发数；过高可能触发 Telegram 限流
+group_check_concurrency = 24
+# 群组禁用/踢出/封禁等写操作并发数；建议低于巡检并发
+group_action_concurrency = 8
+# 退群完全封禁模式：开启后巡检发现退群用户会在所有 GROUP_ID 群里被永久 ban
+#   • 永封通过 bot.ban_chat_member 实现（不会自动 unban），需要 Bot 是群管理员且有封禁权限
+#   • 开启后巡检的"重新入群识别"分支会被跳过（永封后该分支不会命中）
+#   • 谨慎开启：误判会导致用户永久无法回到群里
+ban_on_leave = false
+# Bot 出站代理（如 http://127.0.0.1:7890 / socks5://127.0.0.1:1080）
+proxy_url = ""
+# Bot 绑定确认回调（可填完整接口或后端基址；留空走默认）
+bind_confirm_api_url = ""
+# —— Bot 文案自定义（留空使用内置默认）
+#   • 所有文本按 Markdown 渲染，自行转义 _ * [ 等特殊字符
+#   • 可用占位符: {server_name}, {user_name}, {bot_username}
+bot_start_text = ""     # /start 私聊完整文本；留空使用内置默认
+bot_group_start_text = "" # 群组 /start 提示文本；留空使用内置默认
+bot_start_title = ""    # /start 第一行标题
+bot_start_intro = ""    # /start 简介段
+bot_bind_prompt_text = "" # /bind 无参数时的绑定码输入提示
+bot_help_text = ""      # /twihelp 完整文本；留空使用内置默认
+bot_admin_help_text = "" # /twishelp 完整文本；留空使用内置默认
+bot_help_header = ""    # 旧配置：内置 /twihelp 命令列表前段
+bot_help_footer = ""    # 旧配置：内置 /twihelp 末尾段
+bot_about = ""          # 关于 Bot / 服务说明（预留 /about 用）
+# 自定义命令：普通文本保持固定回复；以 js: 开头时仅在受控沙箱内执行（需管理员通过开发者模式预检）。
+# 示例："/hello = js:reply('Hello ' + (user.username || 'user'))"
+bot_custom_commands = []
+
+# ───────── 注册 / 用户策略 ─────────
+[SAR]
+# 是否开放注册；首次部署强烈建议保持 false，后台开管理员后再放开
+register_mode = false
+# 是否强制必须使用注册码
+register_code_limit = false
+# 最大已注册用户数；超过后停止接收新注册
+user_limit = 200
+# 是否启用求片功能；默认关闭
+media_request_enabled = false
+# 每用户最多同时存在的求片数（待处理 + 下载中），-1 不限
+max_concurrent_requests_per_user = -1
+# 默认卡码生成格式，可包含自定义文本；注册/续期专用格式为空时回退到这里。
+# 占位符：{random}=随机部分，{type}=REG/REN/VIP，{days}=账号天数，{index}=批量序号，{validity}=卡码有效期小时，{limit}=次数上限。
+# 示例: TW-{type}-{random} / 银河列车-{days}-{random}
+regcode_format = "code-{random}"
+# 仅 type=1 注册码使用；留空沿用 regcode_format。
+register_code_format = ""
+# type=2 续期码使用；留空沿用 regcode_format。邀请中心专属续期码未配置时保持 REN-{random} 旧格式。
+renew_code_format = ""
+# 随机算法预设：hex20=20位十六进制；base32-16=易抄写大写字符；alnum-16=大写字母数字；digits-12=纯数字；uuid=UUID v4；legacy-sha1=旧版风格
+regcode_random_algorithm = "hex20"
+# 假卡码被已登录用户使用后的动作：none / disable_user / disable_user_and_deactivate_code
+regcode_decoy_action = "disable_user"
+# 是否允许无码注册（无注册码也能建系统账号；Emby 仍需事后补建）
+allow_pending_register = true
+# 无 Emby 账户的用户是否可查看部分页面（公告、签到等）
+allow_no_emby_view = true
+
+# —— Emby 自由注册（队列）
+emby_direct_register_enabled = false
+# 自助注册默认有效期（天），-1 = 永久。已统一为单值，旧的
+# day_options / allow_custom_days / custom_days_min/max 字段已废弃且不再读取。
+emby_direct_register_days = 30
+emby_direct_register_workers = 8
+emby_direct_register_max_queue = 1000
+emby_direct_register_status_ttl = 1800
+# —— Emby 用户总上限（所有绑定了 Emby 的本地账号 + 标记 PENDING 的待补建数总和），-1 = 不限制
+emby_user_limit = -1
+
+# —— 注册 / 绑定邮箱的域名校验（与 [Email] 邮箱验证发码共用同一份名单）
+# validation_mode：whitelist=仅允许名单内域名；blacklist=禁止名单内域名；留空=不限制。
+# 白名单优先于黑名单。域名匹配大小写不敏感，且会匹配子域（如 example.com 命中 a.example.com）。
+email_validation_mode = ""
+email_whitelist = []
+email_blacklist = []
+
+# —— 管理员 / 白名单（优先 UID，逗号分隔）
+# ⚠ 请改成你的真实 UID；空字符串表示"无管理员"
+admin_uids = ""
+admin_usernames = ""
+white_list_uids = ""
+white_list_usernames = ""
+
+# —— 邀请树（已绑定 Emby 的用户可向下邀请；A 邀 B 邀 C 计 3 层）
+invite_enabled = false
+invite_limit = 10
+invite_root_user_limit = -1
+invite_max_depth = 3
+invite_require_emby = true
+invite_code_default_days = 30
+# 邀请码格式；支持 {random}/{type}/{days}/{index}，不强制固定前缀。
+invite_code_format = "inv-{random}"
+# 邀请码随机算法；独立于注册码随机算法。hex10 为旧默认。
+invite_code_random_algorithm = "hex10"
+
+# —— 长期无 Emby 的悬空用户自动清理
+auto_cleanup_no_emby = false
+auto_cleanup_no_emby_days = 7
+
+# —— 签到 / 积分（原 [Signin] 节并入此处。可选启用积分续期，无排行榜）
+# 命名说明：原 [Signin].enabled 改为 signin_enabled 避免与 SAR 整体开关混淆；
+# 其余字段保持原名（currency_name / daily_min / ...）。
+signin_enabled = true
+currency_name = "星币"
+daily_min = 5
+daily_max = 20
+streak_bonus_enabled = true
+streak_bonus_days = [3, 7, 14, 30]
+streak_bonus_points = [10, 50, 100, 300]
+reset_after_miss = true
+# 是否允许用户用签到积分续期；默认关闭，关闭时前端不显示兑换入口。
+signin_renewal_enabled = false
+# 每次积分续期消耗多少积分；仅 signin_renewal_enabled=true 时生效。
+signin_renewal_cost = 100
+# 每次积分续期增加多少天；仅 signin_renewal_enabled=true 时生效。
+signin_renewal_days = 30
+# 是否允许用户手动兑换 type=2 续期码。
+manual_renew_code_enabled = true
+# 普通 Emby 账号自动保号：到期时检查近 N 天播放，有活跃则扣积分续期；
+# 积分不足时冻结 Emby 并进入宽限期，宽限结束仍不足则删除 Emby。
+retention_enabled = false
+retention_activity_days = 30
+retention_grace_days = 5
+# 使用签到积分兑换一个 30 天 Emby 注册码。
+registration_code_exchange_enabled = false
+registration_code_exchange_cost = 1000
+registration_code_exchange_days = 30
+
+# ───────── MoviePilot v2（仅管理员 / 白名单）─────────
+[MoviePilot]
+enabled = false
+url = "http://127.0.0.1:3001"
+username = ""
+password = ""
+# 可直接填写 Bearer Token；留空时后端使用 username/password 登录。
+access_token = ""
+
+# ───────── 设备 / 并发流限制 ─────────
+[DeviceLimit]
+device_limit_enabled = false
+max_devices = 5
+max_streams = 2
+# 超限时是否自动踢最早的会话
+kick_oldest_session = false
+
+# ───────── API 服务器 ─────────
+[API]
+# 监听地址；0.0.0.0 = 所有网卡
+host = "0.0.0.0"
+port = 5000
+# 生产请保持 false；开启 debug 会回显堆栈、自动重载
+debug = false
+# 登录 Token 有效期（秒）；默认 10 天
+token_expire = 864000
+# 是否启用 CORS
+cors_enabled = true
+# ⚠ CORS 白名单：含 "*" 时浏览器禁用 Cookie（登录会失败）。
+# 生产请显式列出前端域名，例：["https://app.example.com"]
+cors_origins = []
+# 文件上传目录（绝对路径或相对项目根目录），留空使用默认 uploads/
+# upload_folder = "uploads"
+# 单文件上传字节上限（默认 5 MiB）
+# max_upload_size = 5242880
+# —— 会话 Cookie ——
+session_cookie_name = "twilight_session"
+# 生产必须 true；HTTP 调试再临时关闭
+session_cookie_secure = true
+# 同站部署 Strict；前后端跨域必须 None（同时 secure=true）
+session_cookie_samesite = "Strict"
+# 留空用请求 Host；跨子域共享会话填顶级域 .example.com
+session_cookie_domain = ""
+session_cookie_path = "/"
+# 可信反向代理 CIDR。只有 remote_addr 命中这里时才信任 X-Real-IP / X-Forwarded-For。
+# 默认仅信任本机反代；多级代理请显式加入反代出口 IP/CIDR，勿填整个私网段。
+# 注意：键名必须与代码一致（trusted_proxy_cidrs），写错会被静默忽略并退化到 fail-closed。
+trusted_proxy_cidrs = ["127.0.0.0/8", "::1/128"]
+
+# ───────── 安全 ─────────
+[Security]
+# 找回密码总开关：关闭后所有途径均不可用
+forgot_password_enabled = true
+# 允许通过 Emby 账号验证重置 Web 面板密码
+forgot_password_emby_enabled = true
+# 允许通过绑定邮箱验证码重置 Web 面板密码
+forgot_password_email_enabled = true
+# 同一 IP 连续登录失败多少次后锁定
+login_fail_threshold = 5
+# 锁定时长（分钟），影响登录限流窗口
+lockout_minutes = 30
+# 仅凭 telegram_id 直登（高风险，生产保持 false）
+telegram_direct_login_enabled = false
+# 通过 API Key 直接换取 Web 会话 Token（高风险，生产保持 false）
+apikey_direct_login_enabled = false
+# Bot/外部系统调用内部接口的共享密钥；必须高熵随机字符串
+# 生成示例：openssl rand -base64 48 | tr -d '\n'
+bot_internal_secret = ""
+
+# ───────── 速率限制 ─────────
+# 所有阈值单位为「次数 / 时间窗」，0 或负数表示不限制。也可在后台「系统配置 →
+# 限流策略」可视化调整（热重载）。
+[RateLimit]
+# 总开关：关闭后后端不执行任何限流
+enabled = true
+# 同一 IP 每分钟总请求数（进路由前的第一道闸）
+global_per_minute = 1200
+# 同一 IP 每分钟登录 / API Key 登录请求数
+login_per_minute = 60
+# 同一账号 5 分钟内登录尝试数（在用户名是否存在之前判定，防枚举时序差）
+login_user_per_5m = 10
+# 同一 IP 每 10 分钟注册请求数
+register_per_10m = 30
+# 找回密码：同一 IP 每 10 分钟（含邮箱找回两步）
+forgot_password_ip_per_10m = 20
+# 找回密码：同一账号每 30 分钟
+forgot_password_user_per_30m = 10
+# 邮箱发码：同一 IP 每 10 分钟
+email_code_ip_per_10m = 20
+# 邮箱发码：同一收件邮箱每 10 分钟（防对单一邮箱轰炸）
+email_code_addr_per_10m = 5
+# 邮箱发码：同一登录账号每 10 分钟（防同一账号轮换收件邮箱滥刷）
+email_code_uid_per_10m = 10
+# 头像 / 背景上传：同一用户每分钟
+upload_per_minute = 60
+# 站点图标上传：同一管理员每分钟
+admin_icon_per_minute = 20
+# API Key 未单独设置时的默认每分钟额度
+api_key_default_per_minute = 300
+
+# ───────── 定时任务 ─────────
+# 各 job 的触发时间 / 间隔现在统一在「定时任务」页面按 job 维度调整，
+# 下方字段仅作为「首次拉起或重置」时的默认值；运行时被 DB 中的 schedule 覆盖。
+[Scheduler]
+timezone = "Asia/Shanghai"
+enabled = true
+# 主循环检查间隔（秒，10-300）
+tick_interval_seconds = 30
+# 过期用户清理（HH:MM，默认值）
+expired_check_time = "03:00"
+# 即将过期提醒（默认值）
+expiring_check_time = "09:00"
+# 每日统计汇总（默认值）
+daily_stats_time = "00:05"
+# 会话清理间隔（小时，默认值）
+session_cleanup_interval = 6
+# Emby 用户同步间隔（小时，默认值）
+emby_sync_interval = 6
+# 清理无 Emby 账号（每日 HH:MM）
+cleanup_no_emby_time = "03:30"
+# 清理未使用 Emby 开通资格（每日 HH:MM）
+cleanup_pending_emby_time = "03:45"
+# 清理未使用上传文件（每日 HH:MM）
+cleanup_unused_uploads_time = "02:20"
+# 审计日志自动清理（每日 HH:MM）
+cleanup_audit_logs_time = "04:30"
+
+# ───────── 系统自动更新 ─────────
+[SystemUpdate]
+# 默认关闭；开启后由 Scheduler 自动执行 git fetch/checkout/pull，不安装旧后端依赖
+auto_update_enabled = false
+# 自动更新使用的 Git 仓库和分支
+repo_url = "https://github.com/Prejudice-Studio/Twilight.git"
+branch = "main"
+# Linux/systemd 环境下更新后重启 twilight / twilight-bot / twilight-scheduler
+restart_services = true
+# 自动更新时间类型：interval = 固定间隔；cron_daily = 每日固定时间
+auto_update_trigger_type = "interval"
+# 固定间隔模式：每多少小时更新一次
+auto_update_interval_hours = 24
+# 每日固定时间模式：HH:MM
+auto_update_time = "04:00"
+
+# ───────── 通知 ─────────
+[Notification]
+enabled = true
+# 到期前几天提醒
+expiry_remind_days = 3
+# 新媒体入库是否广播
+new_media_notify = false
+
+# ───────── Bangumi 同步 ─────────
+[BangumiSync]
+# 开启后看完 Emby 自动在 BGM 标记进度（每个用户必须配置自己的 Token）
+enabled = false
+# Emby Webhook 共享密钥；建议设置并在通知 URL 后追加 ?token=该值
+webhook_secret = ""
+auto_add_collection = true
+private_collection = true
+# 命中关键词的条目不同步
+block_keywords = []
+# 播放进度达到多少 % 才算"看完"
+min_progress_percent = 80
+
+# ───────── 工单系统 ─────────
+[Ticket]
+enabled = false
+types = ["all"]
+
+# ───────── 操作审计 ─────────
+[AuditLog]
+# 总开关：关闭后不再记录新的审计日志
+enabled = true
+# 自动清理：默认关闭，管理员可在后台手动清理
+auto_cleanup_enabled = false
+# 日志保留天数（0 = 不限）
+retention_days = 90
+# 最大保留条数（0 = 不限）
+max_entries = 10000
+# 按天数清理时保留管理员操作日志
+preserve_admin = true
+# 每日清理检查时间
+cleanup_check_time = "04:30"
+
+# ───────── 邮箱验证 / SMTP 发信 ─────────
+# 邮箱验证子系统：登录态绑定/验证邮箱、登出态找回密码、强制绑定门、改密二次校验。
+# 验证码只存服务端 HMAC 哈希（不存明文），带尝试上限 + 有效期 + 多重限流。
+[Email]
+# 总开关：关闭后所有发码 / 邮箱找回 / 强制绑定均降级，前端隐藏入口。
+# ⚠ 开启 force_bind 但 SMTP 未配置完整时，强制门会自动失效，避免把用户锁在仪表盘外。
+enabled = false
+
+# —— SMTP 发信服务器 ——
+# 发信服务器地址，如 smtp.gmail.com / smtp.qq.com / smtp.office365.com
+smtp_host = ""
+# 端口：465（SSL）、587（STARTTLS，推荐）、25（明文，不推荐）
+smtp_port = 587
+# 登录用户名，通常即发件邮箱；留空表示不认证（仅适用于内网中继）
+smtp_username = ""
+# 密码或授权码（多数邮箱服务要求使用「应用专用密码 / 授权码」而非登录密码）
+smtp_password = ""
+# 加密方式：ssl=隐式 TLS（465）；starttls=显式 TLS（587）；none=明文（25，不推荐）
+smtp_encryption = "starttls"
+# From 发件地址；留空时回落到 smtp_username
+smtp_from_address = ""
+# From 显示名称；留空时回落到站点名称 server_name
+smtp_from_name = ""
+# 单次发信超时秒数
+smtp_timeout_seconds = 10
+
+# —— 强制绑定 ——
+# 开启后普通用户 / 白名单进入仪表盘前必须先验证邮箱（管理员仅提示、不阻断），
+# 且改系统密码 / 改 Emby 密码都会要求邮箱验证码。服务端强制（非仅前端守卫）。
+force_bind = false
+
+# —— 验证码格式与有效期 ——
+# 验证码长度（取值夹取到 4-12，默认 6）
+code_length = 6
+# 验证码类型：numeric=纯数字；alphanumeric=大写字母+数字（去除 0/1/I/O 等易混淆字符）
+code_type = "numeric"
+# 验证码有效期（分钟）
+code_ttl_minutes = 10
+# 同一邮箱两次发码的最小间隔（秒），防轰炸
+resend_cooldown_seconds = 60
+# 单个验证码允许的错误尝试次数，超过即作废（防在线爆破）
+max_attempts = 5
+
+# 自动清理已过期邮箱验证码记录（随调度器会话巡检执行）
+auto_cleanup_expired_verifications = true
+# 自动清理长期未验证邮箱字段，释放邮箱地址给其他账号使用；不会影响已验证邮箱
+auto_cleanup_unverified = true
+# 账号创建超过该天数仍未验证邮箱时自动清空邮箱字段
+auto_cleanup_unverified_days = 1
+
+# —— 邮件模板（占位符：{site}=站点名、{code}=验证码、{ttl}=有效分钟数）——
+subject_template = "{site} 邮箱验证码"
+body_template = """您正在 {site} 进行邮箱验证。
+
+验证码：{code}
+
+验证码 {ttl} 分钟内有效，请勿向任何人泄露。如非本人操作，请忽略本邮件。"""
+
+# ───────── 签到 / 积分（已并入 [SAR] 节，本段保留为旧版升级提示）─────────
+# 原 [Signin] 节自 v1.x 起已并入 [SAR]：
+#   - enabled              → signin_enabled
+#   - currency_name        → currency_name
+#   - daily_min/daily_max  → daily_min/daily_max
+#   - streak_bonus_*       → streak_bonus_*
+#   - reset_after_miss     → reset_after_miss
+#   - renewal_*            → signin_renewal_*
+# 启动时若仍存在独立的 [Signin] 节，会被自动迁移到 [SAR] 并清理掉；
+# 无需手动改动，但模板里不再保留该节以免误导。

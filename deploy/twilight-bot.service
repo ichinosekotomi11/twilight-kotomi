@@ -1,0 +1,34 @@
+[Unit]
+Description=Twilight Go Telegram Bot Bridge
+After=network-online.target twilight.service
+Wants=network-online.target
+PartOf=twilight.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=root
+Group=root
+WorkingDirectory=/root/Twilight
+ExecStart=/root/Twilight/bin/twilight bot --config config.toml
+
+EnvironmentFile=-/root/Twilight/.env
+
+LimitNOFILE=65535
+MemoryMax=512M
+MemoryHigh=384M
+
+Restart=always
+RestartSec=10
+
+TimeoutStopSec=15
+KillMode=mixed
+KillSignal=SIGTERM
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=twilight-bot
+
+[Install]
+WantedBy=multi-user.target
