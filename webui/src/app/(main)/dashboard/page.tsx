@@ -461,6 +461,7 @@ export default function DashboardPage() {
   const isPendingEmby = Boolean(user?.pending_emby) && !user?.emby_id;
   const isPendingEmbyFromRegcode = isPendingEmby && user?.pending_emby_days !== null && user?.pending_emby_days !== undefined;
   const hasGrantedEmbyRegisterEntitlement = isPendingEmbyFromRegcode;
+  const panelAccountPermanent = true;
 
   let expiredTimestamp: number | null = null;
   if (user?.expired_at !== undefined && user.expired_at !== null) {
@@ -483,6 +484,13 @@ export default function DashboardPage() {
   const daysLeft = !isPermanent && !isPendingEmby
     ? Math.max(0, Math.ceil((safeExpiredTimestamp - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
+  const panelAccountStatus = isPendingEmby
+    ? t("dashboard.embyNotOpened")
+    : isPending
+      ? t("dashboard.embyPending")
+      : user?.active
+        ? t("dashboard.normal")
+        : t("dashboard.disabled");
   const signinRenewal = signinSummary?.renewal;
 
   const getGreeting = () => {
@@ -861,20 +869,13 @@ export default function DashboardPage() {
             <div className="p-3 w-fit bg-amber-500/10 text-amber-500 rounded-2xl">
               <Calendar className="h-5 w-5" />
             </div>
-            {!isPermanent && !isPendingEmby && (
-              <Badge variant={isExpired ? "destructive" : daysLeft <= 7 ? "warning" : "outline"} className="text-[10px]">
-                {isExpired ? t("dashboard.expired") : t("dashboard.daysLeft", { days: daysLeft })}
-              </Badge>
-            )}
-            {isPendingEmby && (
-              <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                {t("dashboard.notOpened")}
-              </Badge>
-            )}
+            <Badge variant="outline" className="text-[10px]">
+              {t("dashboard.permanentDisplay")}
+            </Badge>
           </div>
           <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("dashboard.expiryCountdown")}</p>
           <h3 className="text-2xl sm:text-3xl font-black mt-1 break-all">
-            {isPendingEmby ? "—" : isPermanent ? t("dashboard.permanentDisplay") : t("score.days", { days: daysLeft })}
+            {panelAccountPermanent ? t("dashboard.permanentDisplay") : t("score.days", { days: daysLeft })}
           </h3>
         </motion.div>
 
@@ -884,7 +885,7 @@ export default function DashboardPage() {
           </div>
           <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{t("dashboard.accountStatus")}</p>
           <h3 className="text-2xl sm:text-3xl font-black mt-1">
-            {isPendingEmby ? t("dashboard.embyNotOpened") : isPending ? t("dashboard.embyPending") : isExpired ? t("dashboard.expired") : t("dashboard.normal")}
+            {panelAccountStatus}
           </h3>
         </motion.div>
 

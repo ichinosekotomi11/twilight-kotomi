@@ -430,10 +430,20 @@ func runtimeConfigPath(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	target = canonicalConfigTarget(target)
+	expected = canonicalConfigTarget(expected)
 	if target != expected {
 		return "", fmt.Errorf("configuration file is fixed to %s, got %s", expected, target)
 	}
 	return fixed, nil
+}
+
+func canonicalConfigTarget(path string) string {
+	dir, name := filepath.Split(path)
+	if realDir, err := filepath.EvalSymlinks(dir); err == nil {
+		return filepath.Join(realDir, name)
+	}
+	return path
 }
 
 func printHelp() {

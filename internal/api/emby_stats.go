@@ -157,12 +157,14 @@ func (a *App) embyStatsData(ctx context.Context, period string, now time.Time, l
 func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time.Time, limit int) embyStatsResult {
 	window := a.embyStatsWindow(period, now)
 	limit = a.embyStatsTopLimit(limit)
+	cacheKey := fmt.Sprintf("%s|%d|%d", window.Period, window.Start.Unix(), limit)
 	records := a.store().PlaybackRecords(0, window.Start.Unix(), 10000)
 	localRecords := filterPlaybackRecordsForWindow(records, window)
 	activityEntries := []embyActivityLogEntry{}
 	activityEvents := []embyPlaybackEvent{}
+	var activityErr error
 	if a.embyConfigured() {
-		activityEntries = a.embyActivityEntriesSince(ctx, window.Start, window.Start.Location(), 10000)
+		activityEntries, activityErr = a.embyActivityEntriesSince(ctx, window.Start, window.Start.Location(), 10000)
 		activityEvents = embyPlaybackEventsFromActivity(activityEntries, window.Start, window.End, window.Start.Location())
 	}
 	source := "local_playback_records"
@@ -238,20 +240,7 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 	}
 	seriesTop := toRankEntries(seriesBuckets)
 	movieTop := toRankEntries(movieBuckets)
-	zap.L().Info(
-		"emby stats built",
-		zap.String("period", window.Period),
-		zap.String("source", source),
-		zap.Time("start", window.Start),
-		zap.Time("end", window.End),
-		zap.Int("local_records", len(localRecords)),
-		zap.Int("activity_entries", len(activityEntries)),
-		zap.Int("activity_events", len(activityEvents)),
-		zap.Int("series_buckets", len(seriesBuckets)),
-		zap.Int("movie_buckets", len(movieBuckets)),
-		zap.Int("user_buckets", len(userBuckets)),
-	)
-	return embyStatsResult{
+	result := embyStatsResult{
 		Window:      window,
 		SeriesTop:   seriesTop,
 		MovieTop:    movieTop,
@@ -268,6 +257,60 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 			"user_buckets":            len(userBuckets),
 		},
 	}
+	if activityErr != nil {
+		zap.L().Warn(
+			"emby stats activity fetch degraded",
+			zap.String("period", window.Period),
+			zap.Time("start", window.Start),
+			zap.Int("activity_entries", len(activityEntries)),
+			zap.Int("activity_events", len(activityEvents)),
+			zap.Error(activityErr),
+		)
+		if len(activityEvents) == 0 {
+			if cached, ok := a.cachedEmbyStats(cacheKey, now); ok {
+				cached.Debug["source"] = "emby_stats_cache"
+				cached.Debug["cache_reason"] = activityErr.Error()
+				return cached
+			}
+		}
+	}
+	zap.L().Info(
+		"emby stats built",
+		zap.String("period", window.Period),
+		zap.String("source", source),
+		zap.Time("start", window.Start),
+		zap.Time("end", window.End),
+		zap.Int("local_records", len(localRecords)),
+		zap.Int("activity_entries", len(activityEntries)),
+		zap.Int("activity_events", len(activityEvents)),
+		zap.Int("series_buckets", len(seriesBuckets)),
+		zap.Int("movie_buckets", len(movieBuckets)),
+		zap.Int("user_buckets", len(userBuckets)),
+	)
+	if len(activityEvents) > 0 {
+		a.storeEmbyStats(cacheKey, result, now)
+	}
+	return result
+}
+
+func (a *App) cachedEmbyStats(key string, now time.Time) (embyStatsResult, bool) {
+	a.embyStatsMu.Lock()
+	defer a.embyStatsMu.Unlock()
+	entry, ok := a.embyStatsCache[key]
+	if !ok {
+		return embyStatsResult{}, false
+	}
+	if now.Sub(entry.checked) > 2*time.Hour {
+		delete(a.embyStatsCache, key)
+		return embyStatsResult{}, false
+	}
+	return entry.result, true
+}
+
+func (a *App) storeEmbyStats(key string, result embyStatsResult, now time.Time) {
+	a.embyStatsMu.Lock()
+	defer a.embyStatsMu.Unlock()
+	a.embyStatsCache[key] = embyStatsCacheEntry{checked: now, result: result}
 }
 
 func filterPlaybackRecordsForWindow(records []store.PlaybackRecord, window embyStatsWindow) []store.PlaybackRecord {

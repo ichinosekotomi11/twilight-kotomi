@@ -72,6 +72,10 @@ func sameHostRedirectPolicy(req *http.Request, via []*http.Request) error {
 }
 
 func getJSON(ctx context.Context, endpoint string, headers map[string]string, dst any) error {
+	return getJSONWithTimeout(ctx, endpoint, headers, dst, 10*time.Second)
+}
+
+func getJSONWithTimeout(ctx context.Context, endpoint string, headers map[string]string, dst any, timeout time.Duration) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return err
@@ -79,7 +83,7 @@ func getJSON(ctx context.Context, endpoint string, headers map[string]string, ds
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-	return doJSONRequest(req, dst)
+	return doJSONRequestWithTimeout(req, dst, timeout)
 }
 
 func postJSON(ctx context.Context, endpoint string, headers map[string]string, body any, dst any) error {

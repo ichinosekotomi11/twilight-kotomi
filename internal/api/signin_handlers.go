@@ -25,7 +25,14 @@ const (
 	signinRenewalInsufficientMessage = "积分不足，无法续期"
 	signinRenewalUnavailableMessage  = "当前账号无需或无法使用积分续期"
 	signinRenewalSuccessMessage      = "续期成功"
+	signinDateLayout                 = "2006-01-02"
 )
+
+var signinResetLocation = time.FixedZone("Asia/Shanghai", 8*3600)
+
+func signinBusinessDate(now time.Time) string {
+	return now.In(signinResetLocation).Format(signinDateLayout)
+}
 
 func (a *App) handleSigninConfig(w http.ResponseWriter, r *http.Request, _ Params) {
 	ok(w, "OK", signinConfigPayload(*a.cfg()))
@@ -225,7 +232,13 @@ func signinConfigPayload(cfg config.Config) map[string]any {
 }
 
 func signinSummaryPayload(cfg config.Config, si store.Signin) map[string]any {
-	today := time.Now().Format("2006-01-02")
+	return signinSummaryPayloadAt(cfg, si, time.Now())
+}
+
+func signinSummaryPayloadAt(cfg config.Config, si store.Signin, now time.Time) map[string]any {
+	// 与 store.AddSigninWithOptions 使用同一业务日口径：北京时间自然日。
+	// 否则当服务器系统时区仍是 UTC 时，前端按钮会比实际签到资格晚 8 小时刷新。
+	today := signinBusinessDate(now)
 	longest := si.LongestStreak
 	if longest < si.Streak {
 		longest = si.Streak

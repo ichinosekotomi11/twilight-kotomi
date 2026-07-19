@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/prejudice-studio/twilight/internal/security"
 
@@ -87,6 +88,10 @@ func (a *App) embyConfigured() bool {
 }
 
 func (a *App) embyGet(ctx context.Context, apiPath string, dst any) error {
+	return a.embyGetWithTimeout(ctx, apiPath, dst, 10*time.Second)
+}
+
+func (a *App) embyGetWithTimeout(ctx context.Context, apiPath string, dst any, timeout time.Duration) error {
 	if strings.TrimSpace(a.cfg().EmbyToken) == "" {
 		return fmt.Errorf("Emby API Token 未配置，拒绝发送未鉴权请求")
 	}
@@ -94,7 +99,7 @@ func (a *App) embyGet(ctx context.Context, apiPath string, dst any) error {
 	if err != nil {
 		return err
 	}
-	return getJSON(ctx, endpoint, a.embyHeaders(), dst)
+	return getJSONWithTimeout(ctx, endpoint, a.embyHeaders(), dst, timeout)
 }
 
 func (a *App) embyPost(ctx context.Context, apiPath string, body any, dst any) error {

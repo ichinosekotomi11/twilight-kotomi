@@ -65,6 +65,10 @@ func (a *App) systemUserLimitReached() (bool, int, int) {
 	return limit > 0 && current >= limit, current, limit
 }
 
+func userUsesEmbyExpiry(user store.User) bool {
+	return strings.TrimSpace(user.EmbyID) != "" || user.PendingEmby
+}
+
 func (a *App) embyCapacityReached(excludeUID int64) (bool, int, int) {
 	return a.embyCapacityReachedExcluding(excludeUID, "", "")
 }
@@ -1121,6 +1125,9 @@ func userEntitlementOK(user store.User) bool {
 	if !user.Active {
 		return false
 	}
+	if !userUsesEmbyExpiry(user) {
+		return true
+	}
 	if user.ExpiredAt > 0 && !expiryIsPermanent(user.ExpiredAt) && user.ExpiredAt <= time.Now().Unix() {
 		return false
 	}
@@ -1131,6 +1138,9 @@ func (a *App) maxCodeDays(user store.User) (int, string) {
 	permanentMaxDays := a.cfg().PermanentInviteMaxDays
 	if permanentMaxDays <= 0 {
 		permanentMaxDays = 365
+	}
+	if !userUsesEmbyExpiry(user) {
+		return permanentMaxDays, ""
 	}
 	if expiryIsPermanent(user.ExpiredAt) {
 		return permanentMaxDays, ""

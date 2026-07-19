@@ -78,6 +78,10 @@ type App struct {
 	embyAdminCache        map[string]embyAdminCacheEntry
 	embyPlaybackMu        sync.Mutex
 	embyPlaybackCache     embyPlaybackCacheEntry
+	embyCyclePlaybackMu   sync.Mutex
+	embyCyclePlayback     map[string]embyCyclePlaybackCacheEntry
+	embyStatsMu           sync.Mutex
+	embyStatsCache        map[string]embyStatsCacheEntry
 	embyDeviceAuditMu     sync.Mutex
 	embyDeviceAuditUntil  time.Time
 	embyDeviceAuditCache  map[string]any
@@ -159,6 +163,16 @@ type embyPlaybackCacheEntry struct {
 	byUser   map[string]int64
 }
 
+type embyCyclePlaybackCacheEntry struct {
+	checked time.Time
+	seconds int64
+}
+
+type embyStatsCacheEntry struct {
+	checked time.Time
+	result  embyStatsResult
+}
+
 type principal struct {
 	User       store.User
 	APIKey     store.APIKey
@@ -234,6 +248,8 @@ func New(cfg config.Config, st *store.Store) (*App, error) {
 		developerJSCallbacks: map[string]developerJSCallbackContext{},
 		developerJSWaiters:   map[string]developerJSMessageWaiter{},
 		embyAdminCache:       map[string]embyAdminCacheEntry{},
+		embyCyclePlayback:    map[string]embyCyclePlaybackCacheEntry{},
+		embyStatsCache:       map[string]embyStatsCacheEntry{},
 		bindStatus:           newBindStatusHub(),
 	}
 	app.runtime.Store(&runtimeState{
@@ -1384,6 +1400,10 @@ func (a *App) userFromPath(w http.ResponseWriter, params Params, key string) (st
 }
 
 func publicUser(u store.User) map[string]any {
+	expiredAt := u.ExpiredAt
+	if !userUsesEmbyExpiry(u) {
+		expiredAt = permanentExpiryUnix
+	}
 	return map[string]any{
 		"uid":               u.UID,
 		"username":          u.Username,
@@ -1394,8 +1414,8 @@ func publicUser(u store.User) map[string]any {
 		"role":              u.Role,
 		"role_name":         roleName(u.Role),
 		"active":            u.Active,
-		"expire_status":     expireStatus(u.ExpiredAt),
-		"expired_at":        publicExpiryUnix(u.ExpiredAt),
+		"expire_status":     expireStatus(expiredAt),
+		"expired_at":        publicExpiryUnix(expiredAt),
 		"emby_id":           u.EmbyID,
 		"emby_username":     u.EmbyUsername,
 		"emby_bound_at":     zeroNil(effectiveEmbyBoundAt(u)),

@@ -439,7 +439,7 @@ func (a *App) telegramHandlePlayInfo(ctx context.Context, chatID, telegramID int
 		return
 	}
 	now := time.Now()
-	playbackCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	playbackCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	monthly := a.embyMonthlyPlaybackSummary(playbackCtx, u, now)
 	cancel()
 	records := a.store().PlaybackRecords(u.UID, monthly.Cycle.Start.Unix(), 1000)

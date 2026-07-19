@@ -4644,6 +4644,9 @@ func TestPermanentExpiryNormalizesForPublicAPIAndAdminRenew(t *testing.T) {
 	if got := numeric(publicUser(store.User{ExpiredAt: permanentExpiryUnix})["expired_at"]); got != -1 {
 		t.Fatalf("public permanent expired_at = %d, want -1", got)
 	}
+	if got := numeric(publicUser(store.User{ExpiredAt: time.Now().AddDate(0, 0, 28).Unix(), Role: store.RoleNormal, Active: true})["expired_at"]); got != -1 {
+		t.Fatalf("public unbound user expired_at = %d, want -1", got)
+	}
 
 	app := newTestApp(t)
 	user, err := app.store().CreateUser(store.User{Username: "admin-renew-perm", Role: store.RoleNormal, Active: true, ExpiredAt: time.Now().AddDate(0, 0, 1).Unix(), EmbyID: "emby-renew"})
@@ -5975,7 +5978,9 @@ func TestUserEntitlementOKExpiredBlocksInviteMint(t *testing.T) {
 		{"active+future_expiry", store.User{Active: true, ExpiredAt: now + 86400}, true},
 		{"active+no_expiry", store.User{Active: true, ExpiredAt: 0}, true},
 		{"active+permanent_expiry", store.User{Active: true, ExpiredAt: 253402214400}, true},
-		{"active+past_expiry_blocks", store.User{Active: true, ExpiredAt: now - 1}, false},
+		{"active+past_expiry_blocks", store.User{Active: true, ExpiredAt: now - 1, EmbyID: "emby-expired"}, false},
+		{"active+past_expiry_without_emby_allows_web_account", store.User{Active: true, ExpiredAt: now - 1, EmbyID: ""}, true},
+		{"active+past_expiry_pending_emby_still_blocks", store.User{Active: true, ExpiredAt: now - 1, PendingEmby: true}, false},
 		{"inactive+future_expiry_blocks", store.User{Active: false, ExpiredAt: now + 86400}, false},
 		{"inactive+no_expiry_blocks", store.User{Active: false, ExpiredAt: 0}, false},
 	}
@@ -5996,6 +6001,7 @@ func TestUserEntitlementOKExpiredBlocksInviteMint(t *testing.T) {
 		Username:  "active-but-expired",
 		Role:      store.RoleNormal,
 		Active:    true,
+		EmbyID:    "emby-expired",
 		ExpiredAt: time.Now().Add(-1 * time.Hour).Unix(),
 	})
 	if err != nil {
