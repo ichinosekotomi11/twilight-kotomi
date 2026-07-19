@@ -145,6 +145,7 @@ type Config struct {
 	ForceBindTelegram                          bool
 	TelegramBotToken                           string
 	TelegramAPIURL                             string
+	TelegramInternalAPIURL                     string
 	TelegramAdminIDs                           []int64
 	TelegramGroupIDs                           []string
 	TelegramChannelIDs                         []string
@@ -415,6 +416,7 @@ func Load(path string) (Config, error) {
 	cfg.ForceBindTelegram = reader.boolValue(cfg.ForceBindTelegram, "Global.force_bind_telegram", "force_bind_telegram")
 	cfg.TelegramBotToken = reader.stringValue(cfg.TelegramBotToken, "Telegram.bot_token", "bot_token")
 	cfg.TelegramAPIURL = reader.stringValue(cfg.TelegramAPIURL, "Telegram.telegram_api_url", "telegram_api_url")
+	cfg.TelegramInternalAPIURL = reader.stringValue(cfg.TelegramInternalAPIURL, "Telegram.internal_api_url", "telegram_internal_api_url")
 	cfg.TelegramAdminIDs = reader.int64ListValue(cfg.TelegramAdminIDs, "Telegram.admin_id", "admin_id")
 	cfg.TelegramGroupIDs = reader.stringListValue(cfg.TelegramGroupIDs, "Telegram.group_id", "group_id")
 	cfg.TelegramChannelIDs = reader.stringListValue(cfg.TelegramChannelIDs, "Telegram.channel_id", "channel_id")
@@ -912,6 +914,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("TWILIGHT_TELEGRAM_BOT_TOKEN"); v != "" {
 		cfg.TelegramBotToken = v
+	}
+	if v := os.Getenv("TWILIGHT_TELEGRAM_INTERNAL_API_URL"); v != "" {
+		cfg.TelegramInternalAPIURL = strings.TrimSpace(v)
 	}
 	if v := os.Getenv("TWILIGHT_TELEGRAM_ADMIN_ID"); v != "" {
 		cfg.TelegramAdminIDs = int64ListValue(v)

@@ -125,6 +125,8 @@ emby_url_list_for_whitelist = [
 [Telegram]
 # Telegram Bot API 基础地址（私有部署时可改，比如 https://my-tg-proxy/bot）
 telegram_api_url = "https://api.telegram.org/bot"
+# 独立 Bot 进程回调 API 的本机地址；面板带路径前缀或端口不一致时请显式填写
+internal_api_url = ""
 # Bot Token（@BotFather）
 bot_token = ""
 # 管理员 Telegram ID 列表（数字）；Bot 内 /admin 命令仅向这些 ID 开放

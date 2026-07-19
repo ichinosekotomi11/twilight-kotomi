@@ -67,6 +67,8 @@ emby_url_list_for_whitelist = []
 
 # ───────── Telegram Bot ─────────
 [Telegram]
+telegram_api_url = "https://api.telegram.org/bot"
+internal_api_url = ""
 bot_token = ""
 admin_id = []
 group_id = []

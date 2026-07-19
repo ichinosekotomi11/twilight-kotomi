@@ -930,6 +930,7 @@ func configSectionDefs() []configSectionDef {
 		}},
 		{Key: "Telegram", Title: "Telegram", Description: "Bot、订阅校验和群组管理\n推荐在 Telegram 管理页面操作 Bot 基础设置，高级参数在此调整", Category: "integration", Collapsed: true, Fields: []configFieldDef{
 			{Key: "telegram_api_url", Label: "Bot API URL", Type: "string", Description: "Telegram Bot API 基础地址"},
+			{Key: "internal_api_url", Label: "内部 API URL", Type: "string", Description: "独立 Bot 进程回调本机 API 的地址，例如 http://127.0.0.1:5000；留空时使用 API.port"},
 			{Key: "bot_token", Label: "Bot Token", Type: "secret", Description: "Telegram Bot Token"},
 			{Key: "admin_id", Label: "管理员 Telegram ID", Type: "list", Description: "Bot 管理员 ID 列表"},
 			{Key: "group_id", Label: "群组 ID", Type: "list", Description: "Bot 管理、强制绑定检查和巡检群组"},
@@ -1162,7 +1163,7 @@ func configValues(cfg config.Config) map[string]map[string]any {
 			"emby_url_list": linesToStrings(cfg.EmbyURLList), "emby_url_list_for_whitelist": linesToStrings(cfg.EmbyWhitelistURLList),
 		},
 		"Telegram": {
-			"telegram_api_url": cfg.TelegramAPIURL, "bot_token": cfg.TelegramBotToken, "admin_id": int64sToAny(cfg.TelegramAdminIDs), "group_id": cfg.TelegramGroupIDs,
+			"telegram_api_url": cfg.TelegramAPIURL, "internal_api_url": cfg.TelegramInternalAPIURL, "bot_token": cfg.TelegramBotToken, "admin_id": int64sToAny(cfg.TelegramAdminIDs), "group_id": cfg.TelegramGroupIDs,
 			"force_bind_group": cfg.TelegramForceBindGroup, "channel_id": cfg.TelegramChannelIDs, "force_bind_channel": cfg.TelegramForceBindChannel,
 			"require_group_membership": cfg.TelegramRequireMembership,
 			"enable_tg_panel":          cfg.TelegramEnablePanel, "ban_on_leave": cfg.TelegramBanOnLeave, "auto_enable_rejoined": cfg.TelegramAutoEnableRejoined, "group_check_concurrency": cfg.TelegramGroupCheckConcurrency, "group_action_concurrency": cfg.TelegramGroupActionConcurrency,

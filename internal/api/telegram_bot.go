@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"math"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -335,14 +336,15 @@ func (a *App) confirmBindCodeInline(ctx context.Context, chatID int64, bind stor
 }
 
 func (a *App) confirmBindCodeViaHTTP(ctx context.Context, chatID int64, code string, telegramID int64, username string) {
-	port := a.cfg().Port
-	if port <= 0 {
-		port = 5000
+	endpoint, err := a.telegramBindConfirmInternalURL()
+	if err != nil {
+		zap.L().Warn("telegram bind code internal API URL invalid", zap.Error(err))
+		_ = a.telegramSendMessage(ctx, chatID, "绑定请求配置异常，请联系管理员检查 internal_api_url。")
+		return
 	}
-	url := fmt.Sprintf("http://127.0.0.1:%d/api/v1/users/me/telegram/bind-confirm", port)
 	reqBody := map[string]any{"code": code, "telegram_id": telegramID, "telegram_username": username}
 	b, _ := json.Marshal(reqBody)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(b))
 	if err != nil {
 		_ = a.telegramSendMessage(ctx, chatID, "绑定请求异常，请稍后重试。")
 		return
@@ -357,7 +359,7 @@ func (a *App) confirmBindCodeViaHTTP(ctx context.Context, chatID int64, code str
 		Code    int    `json:"code"`
 	}
 	if err := doJSONRequestWithTimeout(req, &resp, 5*time.Second); err != nil {
-		zap.L().Warn("telegram bind code HTTP fallback failed", zap.String("code", code), zap.Int64("tgid", telegramID), zap.Error(err))
+		zap.L().Warn("telegram bind code HTTP fallback failed", zap.String("code", code), zap.Int64("tgid", telegramID), zap.String("endpoint", endpoint), zap.Error(err))
 		_ = a.telegramSendMessage(ctx, chatID, "绑定请求异常，请稍后重试。若问题持续，请联系管理员。")
 		return
 	}
@@ -384,6 +386,31 @@ func (a *App) confirmBindCodeViaHTTP(ctx context.Context, chatID int64, code str
 			_ = a.telegramSendMessage(ctx, chatID, "绑定失败，请稍后重试。")
 		}
 	}
+}
+
+func (a *App) telegramBindConfirmInternalURL() (string, error) {
+	base := strings.TrimSpace(a.cfg().TelegramInternalAPIURL)
+	if base == "" {
+		port := a.cfg().Port
+		if port <= 0 {
+			port = 5000
+		}
+		base = fmt.Sprintf("http://127.0.0.1:%d", port)
+	}
+	u, err := url.Parse(base)
+	if err != nil {
+		return "", err
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("internal API URL must use http or https")
+	}
+	if strings.TrimSpace(u.Host) == "" {
+		return "", fmt.Errorf("internal API URL host is empty")
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/api/v1/users/me/telegram/bind-confirm"
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String(), nil
 }
 
 func (a *App) telegramHandleMe(ctx context.Context, chatID, telegramID int64) {

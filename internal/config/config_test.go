@@ -43,6 +43,33 @@ max_upload_size = 1234
 	}
 }
 
+func TestLoadTelegramInternalAPIURL(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[Telegram]
+internal_api_url = "http://127.0.0.1:8103/emby"
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TelegramInternalAPIURL != "http://127.0.0.1:8103/emby" {
+		t.Fatalf("unexpected telegram internal api url: %q", cfg.TelegramInternalAPIURL)
+	}
+
+	t.Setenv("TWILIGHT_TELEGRAM_INTERNAL_API_URL", "http://127.0.0.1:5000")
+	cfg, err = Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TelegramInternalAPIURL != "http://127.0.0.1:5000" {
+		t.Fatalf("env did not override telegram internal api url: %q", cfg.TelegramInternalAPIURL)
+	}
+}
+
 func TestLoadEmailCleanupConfigAndEnvOverride(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	content := `[Email]

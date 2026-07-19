@@ -2359,6 +2359,32 @@ func TestTelegramBindConfirmLoopbackOnly(t *testing.T) {
 	}
 }
 
+func TestTelegramBindConfirmInternalURL(t *testing.T) {
+	app := newTestApp(t)
+	app.cfg().Port = 5055
+	got, err := app.telegramBindConfirmInternalURL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "http://127.0.0.1:5055/api/v1/users/me/telegram/bind-confirm" {
+		t.Fatalf("unexpected fallback internal URL: %q", got)
+	}
+
+	app.cfg().TelegramInternalAPIURL = "http://127.0.0.1:8103/emby"
+	got, err = app.telegramBindConfirmInternalURL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "http://127.0.0.1:8103/emby/api/v1/users/me/telegram/bind-confirm" {
+		t.Fatalf("unexpected configured internal URL: %q", got)
+	}
+
+	app.cfg().TelegramInternalAPIURL = "javascript:alert(1)"
+	if _, err = app.telegramBindConfirmInternalURL(); err == nil {
+		t.Fatal("expected invalid scheme to be rejected")
+	}
+}
+
 func TestChangeEmbyPasswordAcceptsEmptyEmbyResponses(t *testing.T) {
 	app := newTestApp(t)
 	app.cfg().EmbyToken = "test-token"
