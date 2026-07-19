@@ -2385,6 +2385,28 @@ func TestTelegramBindConfirmInternalURL(t *testing.T) {
 	}
 }
 
+func TestTelegramBindConfirmRequestKeepsAPIErrorBody(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSONWithCode(w, http.StatusConflict, false, ErrTGBindTargetTaken, "该 Telegram 已绑定到账号 weihu", nil)
+	}))
+	defer api.Close()
+
+	req := httptest.NewRequest(http.MethodPost, api.URL+"/api/v1/users/me/telegram/bind-confirm", strings.NewReader(`{}`))
+	req.RequestURI = ""
+	var resp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Code    int    `json:"code"`
+	}
+	status, err := doTelegramBindConfirmRequest(req, &resp, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != http.StatusConflict || resp.Code != http.StatusConflict || resp.Success || !strings.Contains(resp.Message, "weihu") {
+		t.Fatalf("unexpected bind confirm response: status=%d body=%#v", status, resp)
+	}
+}
+
 func TestChangeEmbyPasswordAcceptsEmptyEmbyResponses(t *testing.T) {
 	app := newTestApp(t)
 	app.cfg().EmbyToken = "test-token"

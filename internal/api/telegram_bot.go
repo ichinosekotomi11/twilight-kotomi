@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"go.uber.org/zap"
+	"io"
 	"math"
 	"net/http"
 	"net/url"
@@ -358,7 +359,11 @@ func (a *App) confirmBindCodeViaHTTP(ctx context.Context, chatID int64, code str
 		Message string `json:"message"`
 		Code    int    `json:"code"`
 	}
-	if err := doJSONRequestWithTimeout(req, &resp, 5*time.Second); err != nil {
+	statusCode, err := doTelegramBindConfirmRequest(req, &resp, 5*time.Second)
+	if resp.Code == 0 {
+		resp.Code = statusCode
+	}
+	if err != nil {
 		zap.L().Warn("telegram bind code HTTP fallback failed", zap.String("code", code), zap.Int64("tgid", telegramID), zap.String("endpoint", endpoint), zap.Error(err))
 		_ = a.telegramSendMessage(ctx, chatID, "绑定请求异常，请稍后重试。若问题持续，请联系管理员。")
 		return
@@ -386,6 +391,36 @@ func (a *App) confirmBindCodeViaHTTP(ctx context.Context, chatID int64, code str
 			_ = a.telegramSendMessage(ctx, chatID, "绑定失败，请稍后重试。")
 		}
 	}
+}
+
+func doTelegramBindConfirmRequest(req *http.Request, dst any, timeout time.Duration) (int, error) {
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	parentCtx := req.Context()
+	if _, ok := parentCtx.Deadline(); !ok {
+		ctx, cancel := context.WithTimeout(parentCtx, timeout)
+		defer cancel()
+		req = req.WithContext(ctx)
+	}
+	resp, err := sharedHTTPClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return resp.StatusCode, err
+	}
+	if dst != nil && len(bytes.TrimSpace(data)) > 0 {
+		if err := json.Unmarshal(data, dst); err != nil {
+			return resp.StatusCode, err
+		}
+	}
+	if resp.StatusCode >= 500 || resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return resp.StatusCode, fmt.Errorf("remote status %d", resp.StatusCode)
+	}
+	return resp.StatusCode, nil
 }
 
 func (a *App) telegramBindConfirmInternalURL() (string, error) {
