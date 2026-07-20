@@ -4258,8 +4258,22 @@ func TestRegisterCodeLimitConsumesRegcodeAtomically(t *testing.T) {
 	}
 }
 
-func TestRegcodeGrantHistoryBlocksSelfUnbindAndRepeatRegistrationGrant(t *testing.T) {
+func TestRegcodeGrantHistoryAllowsSelfUnbindButBlocksRepeatRegistrationGrant(t *testing.T) {
 	app := newTestApp(t)
+	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/Users/emby-old":
+			_, _ = w.Write([]byte(`{"Id":"emby-old","Name":"grant-user","Policy":{"IsDisabled":false}}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/Users/emby-old/Policy":
+			_, _ = w.Write([]byte(`{}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer emby.Close()
+	app.cfg().EmbyURL = emby.URL
+	app.cfg().EmbyToken = "test-token"
 	user, err := app.store().CreateUser(store.User{Username: "grant-user", Role: store.RoleNormal, Active: true, EmbyID: "emby-old", EmbyUsername: "grant-user", EmbyGrantLocked: true, RegistrationSource: registrationSourceRegCode, RegistrationCode: "REG-OLD"})
 	if err != nil {
 		t.Fatal(err)
@@ -4269,24 +4283,17 @@ func TestRegcodeGrantHistoryBlocksSelfUnbindAndRepeatRegistrationGrant(t *testin
 	req = req.WithContext(context.WithValue(req.Context(), principalKey, principal{User: user}))
 	rr := httptest.NewRecorder()
 	app.handleUnbindEmby(rr, req, nil)
-	if rr.Code != http.StatusForbidden || !strings.Contains(rr.Body.String(), `"error_code":"EMBY_UNBIND_FORBIDDEN"`) {
-		t.Fatalf("grant-backed user should not self-unbind Emby, status=%d body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("grant-backed user should self-unbind current Emby, status=%d body=%s", rr.Code, rr.Body.String())
 	}
 	currentUser, _ := app.store().User(user.UID)
-	if currentUser.EmbyID == "" {
-		t.Fatalf("forbidden self-unbind cleared Emby binding: %#v", currentUser)
+	if currentUser.EmbyID != "" || currentUser.EmbyUsername != "" {
+		t.Fatalf("self-unbind did not clear Emby binding: %#v", currentUser)
+	}
+	if !currentUser.EmbyGrantLocked {
+		t.Fatalf("self-unbind should preserve grant history lock: %#v", currentUser)
 	}
 
-	currentUser, err = app.store().UpdateUser(user.UID, func(u *store.User) error {
-		u.EmbyID = ""
-		u.EmbyUsername = ""
-		u.PendingEmby = false
-		u.PendingEmbyDays = nil
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err := app.store().UpsertRegCode(store.RegCode{Code: "REG-NEW-GRANT", Type: 1, Days: 30, ValidityTime: -1, UseCountLimit: 1, Active: true}); err != nil {
 		t.Fatal(err)
 	}

@@ -274,6 +274,9 @@ func (a *App) userHasEmbyGrantHistory(u store.User) bool {
 }
 
 func (a *App) userCanSelfUnbindEmby(u store.User) bool {
+	if strings.TrimSpace(u.EmbyID) != "" {
+		return true
+	}
 	return !a.userHasEmbyGrantHistory(u)
 }
 
