@@ -256,6 +256,9 @@ func (a *App) handleForgotPassword(w http.ResponseWriter, r *http.Request, _ Par
 	}
 	embyUser, okAuth, err := a.embyAuthenticateByName(r.Context(), embyUsername, embyPassword)
 	if err != nil {
+		zap.L().Warn("forgot password emby authentication failed",
+			zap.String("emby_username", embyUsername),
+			zap.Error(err))
 		failWithCode(w, http.StatusUnauthorized, ErrEmbyAuthFailed, "Emby 鉴权失败")
 		return
 	}

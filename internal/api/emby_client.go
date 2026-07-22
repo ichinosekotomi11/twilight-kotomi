@@ -22,6 +22,8 @@ var (
 	embyURLCacheErr    error
 )
 
+const embyAuthenticateTimeout = 45 * time.Second
+
 // validatedEmbyEndpoint 校验 cfg.EmbyURL 后返回拼接好的目标 URL。任何
 // 不可信 scheme（非 http/https）、空 host、解析为 loopback / link-local /
 // 私有 / 元数据 IP 的目标会立即报错，避免 admin 误配 / 被入侵的配置面
@@ -149,7 +151,7 @@ func (a *App) embyAuthenticateByName(ctx context.Context, username, password str
 	authHeader := fmt.Sprintf(`MediaBrowser Client="Twilight", Device="Twilight Bind", DeviceId="%s", Version="1.0.0"`, deviceID)
 	headers := map[string]string{"Accept": "application/json", "X-Emby-Authorization": authHeader}
 	var payload map[string]any
-	if err := postJSON(ctx, endpoint, headers, map[string]any{"Username": username, "Pw": password}, &payload); err != nil {
+	if err := postJSONWithTimeout(ctx, endpoint, headers, map[string]any{"Username": username, "Pw": password}, &payload, embyAuthenticateTimeout); err != nil {
 		if strings.Contains(err.Error(), "remote status 401") || strings.Contains(err.Error(), "remote status 403") {
 			return nil, false, nil
 		}
