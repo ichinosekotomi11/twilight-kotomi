@@ -6125,6 +6125,91 @@ func TestForgotPasswordRejectsExpiredAccount(t *testing.T) {
 	}
 }
 
+func TestForgotPasswordRepairsStaleEmbyIDByVerifiedUsername(t *testing.T) {
+	app := newTestApp(t)
+	app.cfg().EmbyToken = "test-token"
+	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/Users/AuthenticateByName":
+			_, _ = w.Write([]byte(`{"User":{"Id":"emby-new-id","Name":"stale-name","Policy":{}}}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/Users/emby-new-id":
+			_, _ = w.Write([]byte(`{"Id":"emby-new-id","Name":"stale-name","Policy":{}}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/Users/emby-new-id/Policy":
+			_, _ = w.Write([]byte(`{}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer emby.Close()
+	app.cfg().EmbyURL = emby.URL
+
+	hash, err := security.HashPassword("OldPanel123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := app.store().CreateUser(store.User{
+		Username:     "panel-name",
+		PasswordHash: hash,
+		Role:         store.RoleNormal,
+		Active:       true,
+		EmbyID:       "emby-old-id",
+		EmbyUsername: "stale-name",
+		ExpiredAt:    time.Now().AddDate(0, 0, 7).Unix(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := doJSON(app, http.MethodPost, "/api/v1/auth/forgot-password/emby", `{"emby_username":"stale-name","emby_password":"valid-emby-password"}`, nil)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("forgot-password stale emby id status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	updated, _ := app.store().User(user.UID)
+	if updated.EmbyID != "emby-new-id" || updated.EmbyUsername != "stale-name" {
+		t.Fatalf("stale emby binding was not repaired: %#v", updated)
+	}
+	if updated.PasswordHash == hash {
+		t.Fatalf("forgot-password did not reset panel password")
+	}
+}
+
+func TestForgotPasswordRejectsAmbiguousStaleEmbyUsernameRepair(t *testing.T) {
+	app := newTestApp(t)
+	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/Users/AuthenticateByName" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"User":{"Id":"emby-new-id","Name":"shared-name","Policy":{}}}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer emby.Close()
+	app.cfg().EmbyURL = emby.URL
+
+	for _, uid := range []string{"one", "two"} {
+		if _, err := app.store().CreateUser(store.User{
+			Username:     "panel-" + uid,
+			PasswordHash: "old",
+			Role:         store.RoleNormal,
+			Active:       true,
+			EmbyID:       "emby-old-" + uid,
+			EmbyUsername: "shared-name",
+			ExpiredAt:    time.Now().AddDate(0, 0, 7).Unix(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	resp := doJSON(app, http.MethodPost, "/api/v1/auth/forgot-password/emby", `{"emby_username":"shared-name","emby_password":"valid-emby-password"}`, nil)
+	if resp.Code != http.StatusConflict {
+		t.Fatalf("ambiguous forgot-password repair status=%d body=%s, want 409", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), string(ErrEmbyAccountConflict)) {
+		t.Fatalf("expected ErrEmbyAccountConflict, got %s", resp.Body.String())
+	}
+}
+
 // TestSessionCookieRespectsConfiguredDomain 锁住 R62-cookie-domain 修复：
 // 双子域部署（webui = twilight.example.com / API = twilightapi.example.com）
 // 必须把 session cookie 显式打上注册域 ".example.com"，否则浏览器把

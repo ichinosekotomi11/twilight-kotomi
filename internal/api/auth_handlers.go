@@ -16,6 +16,7 @@ package api
 //     app.go 维护；本文件只做"业务流程编排"。
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -263,10 +264,23 @@ func (a *App) handleForgotPassword(w http.ResponseWriter, r *http.Request, _ Par
 		return
 	}
 	embyID := firstNonEmpty(asString(embyUser["Id"]), asString(embyUser["ID"]), asString(embyUser["id"]))
+	embyName := firstNonEmpty(asString(embyUser["Name"]), embyUsername)
 	u, okUser := a.store().FindUserByEmbyID(embyID)
 	if !okUser {
-		failWithCode(w, http.StatusNotFound, ErrEmbyAccountUnlinked, "该 Emby 账号未关联面板账号")
-		return
+		var repairErr error
+		u, okUser, repairErr = a.repairForgotPasswordEmbyBinding(r.Context(), embyID, embyName)
+		if repairErr != nil {
+			zap.L().Warn("forgot password emby binding repair failed",
+				zap.String("emby_username", embyName),
+				zap.String("emby_id", embyID),
+				zap.Error(repairErr))
+			failWithCode(w, http.StatusConflict, ErrEmbyAccountConflict, "该 Emby 账号绑定信息存在冲突，请联系管理员处理")
+			return
+		}
+		if !okUser {
+			failWithCode(w, http.StatusNotFound, ErrEmbyAccountUnlinked, "该 Emby 账号未关联面板账号")
+			return
+		}
 	}
 	if !u.Active {
 		if userExpiredOnly(u) {
@@ -301,6 +315,47 @@ func (a *App) handleForgotPassword(w http.ResponseWriter, r *http.Request, _ Par
 	}
 	a.sessions().DeleteUser(r.Context(), u.UID)
 	ok(w, "密码已重置", map[string]any{"username": u.Username, "new_password": newPassword})
+}
+
+func (a *App) repairForgotPasswordEmbyBinding(ctx context.Context, embyID, embyUsername string) (store.User, bool, error) {
+	embyID = strings.TrimSpace(embyID)
+	embyUsername = strings.TrimSpace(embyUsername)
+	if embyID == "" || embyUsername == "" {
+		return store.User{}, false, nil
+	}
+	var candidates []store.User
+	for _, u := range a.store().ListUsers() {
+		if strings.TrimSpace(u.EmbyID) == "" {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(u.EmbyUsername), embyUsername) || strings.EqualFold(strings.TrimSpace(u.Username), embyUsername) {
+			candidates = append(candidates, u)
+		}
+	}
+	if len(candidates) == 0 {
+		return store.User{}, false, nil
+	}
+	if len(candidates) > 1 {
+		return store.User{}, false, fmt.Errorf("multiple local users match emby username")
+	}
+	candidate := candidates[0]
+	updated, err := a.store().UpdateUser(candidate.UID, func(u *store.User) error {
+		u.EmbyID = embyID
+		u.EmbyUsername = embyUsername
+		u.EmbyDisabled = false
+		return nil
+	})
+	if err != nil {
+		return store.User{}, false, err
+	}
+	zap.L().Info("forgot password repaired stale emby binding",
+		zap.Int64("uid", updated.UID),
+		zap.String("username", updated.Username),
+		zap.String("emby_username", updated.EmbyUsername))
+	if updated.EmbyID != "" {
+		_ = a.embyApplyEnabledState(context.WithoutCancel(ctx), updated.UID, updated.EmbyID, a.embyShouldEnableUser(updated))
+	}
+	return updated, true, nil
 }
 
 func (a *App) handleLogout(w http.ResponseWriter, r *http.Request, _ Params) {
