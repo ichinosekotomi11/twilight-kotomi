@@ -160,17 +160,7 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 	cacheKey := fmt.Sprintf("%s|%d|%d", window.Period, window.Start.Unix(), limit)
 	records := a.store().PlaybackRecords(0, window.Start.Unix(), 10000)
 	localRecords := filterPlaybackRecordsForWindow(records, window)
-	activityEntries := []embyActivityLogEntry{}
-	activityEvents := []embyPlaybackEvent{}
-	var activityErr error
-	if a.embyConfigured() {
-		activityEntries, activityErr = a.embyActivityEntriesSince(ctx, window.Start, window.Start.Location(), 10000)
-		activityEvents = embyPlaybackEventsFromActivity(activityEntries, window.Start, window.End, window.Start.Location())
-	}
 	source := "local_playback_records"
-	if len(activityEvents) > 0 {
-		source = "emby_activity_log"
-	}
 	seriesBuckets := map[string]*embyRankBucket{}
 	movieBuckets := map[string]*embyRankBucket{}
 	userBuckets := map[int64]*embyUserBucket{}
@@ -184,11 +174,7 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 			}
 		}
 	}
-	if len(activityEvents) > 0 {
-		a.addActivityEventsToStats(ctx, activityEvents, userByActivityKey, seriesBuckets, movieBuckets, userBuckets)
-	} else {
-		addPlaybackRecordsToStats(localRecords, userByUID, seriesBuckets, movieBuckets, userBuckets)
-	}
+	addPlaybackRecordsToStats(localRecords, userByUID, seriesBuckets, movieBuckets, userBuckets)
 	toRankEntries := func(buckets map[string]*embyRankBucket) []embyRankEntry {
 		items := make([]embyRankEntry, 0, len(buckets))
 		for _, bucket := range buckets {
@@ -250,29 +236,13 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 			"timezone":                window.Start.Location().String(),
 			"local_records_raw":       len(records),
 			"local_records_in_window": len(localRecords),
-			"activity_entries":        len(activityEntries),
-			"activity_events":         len(activityEvents),
+			"activity_entries":        0,
+			"activity_events":         0,
+			"activity_disabled":       true,
 			"series_buckets":          len(seriesBuckets),
 			"movie_buckets":           len(movieBuckets),
 			"user_buckets":            len(userBuckets),
 		},
-	}
-	if activityErr != nil {
-		zap.L().Warn(
-			"emby stats activity fetch degraded",
-			zap.String("period", window.Period),
-			zap.Time("start", window.Start),
-			zap.Int("activity_entries", len(activityEntries)),
-			zap.Int("activity_events", len(activityEvents)),
-			zap.Error(activityErr),
-		)
-		if len(activityEvents) == 0 {
-			if cached, ok := a.cachedEmbyStats(cacheKey, now); ok {
-				cached.Debug["source"] = "emby_stats_cache"
-				cached.Debug["cache_reason"] = activityErr.Error()
-				return cached
-			}
-		}
 	}
 	zap.L().Info(
 		"emby stats built",
@@ -281,15 +251,12 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 		zap.Time("start", window.Start),
 		zap.Time("end", window.End),
 		zap.Int("local_records", len(localRecords)),
-		zap.Int("activity_entries", len(activityEntries)),
-		zap.Int("activity_events", len(activityEvents)),
+		zap.Bool("activity_disabled", true),
 		zap.Int("series_buckets", len(seriesBuckets)),
 		zap.Int("movie_buckets", len(movieBuckets)),
 		zap.Int("user_buckets", len(userBuckets)),
 	)
-	if len(activityEvents) > 0 {
-		a.storeEmbyStats(cacheKey, result, now)
-	}
+	a.storeEmbyStats(cacheKey, result, now)
 	return result
 }
 

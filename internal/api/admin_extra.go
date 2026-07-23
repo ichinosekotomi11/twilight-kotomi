@@ -52,20 +52,7 @@ func (a *App) handleEmbySyncV2(w http.ResponseWriter, r *http.Request, _ Params)
 }
 
 func (a *App) handleEmbyActivity(w http.ResponseWriter, r *http.Request, _ Params) {
-	limit := clamp(queryInt(r, "limit", 50), 1, 200)
-	if a.requireEmbyConfigured(w) {
-		return
-	}
-	var payload map[string]any
-	if err := a.embyGet(r.Context(), "/System/ActivityLog/Entries?StartIndex=0&Limit="+strconv.Itoa(limit), &payload); err != nil {
-		failWithCode(w, http.StatusBadGateway, ErrEmbyRemoteActivityFail, "读取 Emby 活动日志失败，请稍后重试或检查上游 Emby 状态")
-		return
-	}
-	if items, okItems := payload["Items"]; okItems {
-		ok(w, "OK", items)
-		return
-	}
-	ok(w, "OK", payload)
+	ok(w, "Emby 活动日志读取已禁用", []any{})
 }
 
 func (a *App) handleAdminEmbyUsersV2(w http.ResponseWriter, r *http.Request, _ Params) {

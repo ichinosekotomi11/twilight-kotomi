@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/prejudice-studio/twilight/internal/store"
@@ -177,20 +176,6 @@ func (a *App) embyUserHasRecentPlayback(r *http.Request, user store.User, since 
 		}
 	} else if totalSeconds >= requiredSeconds {
 		return true, totalSeconds / 60, nil
-	}
-
-	if strings.TrimSpace(user.EmbyUsername) != "" {
-		embySeconds := a.embyPlaybackSecondsSince(r.Context(), user.EmbyUsername, since, time.Now())
-		if embySeconds > totalSeconds {
-			totalSeconds = embySeconds
-		}
-		if requiredSeconds <= 0 {
-			if totalSeconds > 0 {
-				return true, maxInt64(1, totalSeconds/60), nil
-			}
-		} else if totalSeconds >= requiredSeconds {
-			return true, totalSeconds / 60, nil
-		}
 	}
 
 	var payload map[string]any

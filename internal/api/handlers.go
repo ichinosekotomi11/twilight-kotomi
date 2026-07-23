@@ -21,7 +21,6 @@ import (
 	"github.com/prejudice-studio/twilight/internal/security"
 	"github.com/prejudice-studio/twilight/internal/store"
 	"github.com/prejudice-studio/twilight/internal/validate"
-	"go.uber.org/zap"
 )
 
 var telegramPublicUsernamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{4,31}$`)
@@ -1608,11 +1607,6 @@ func (c embyPlaybackCycle) Remaining(now time.Time) time.Duration {
 	return c.End.Sub(now)
 }
 
-type embyActivityLogPayload struct {
-	Items            []embyActivityLogEntry `json:"Items"`
-	TotalRecordCount int                    `json:"TotalRecordCount"`
-}
-
 type embyActivityLogEntry struct {
 	Name   string `json:"Name"`
 	Type   string `json:"Type"`
@@ -1623,7 +1617,7 @@ type embyActivityLogEntry struct {
 
 func (a *App) embyMonthlyPlaybackSummary(ctx context.Context, user store.User, now time.Time) embyMonthlyPlayback {
 	cycle := a.embyPlaybackCycle(user, now, 30)
-	totalSeconds := a.embyPlaybackSecondsSince(ctx, user.EmbyUsername, cycle.Start, now)
+	totalSeconds := a.localPlaybackSecondsForUser(user.UID, cycle.Start.Unix(), 10000)
 	return embyMonthlyPlayback{
 		Seconds: totalSeconds,
 		Minutes: (totalSeconds + 59) / 60,
@@ -1667,14 +1661,8 @@ func (a *App) embyMonthlyPlaybackTotals(ctx context.Context, now time.Time) map[
 	}
 	a.embyPlaybackMu.Unlock()
 
-	const pageSize = 200
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	entries, err := a.embyActivityEntriesSince(ctx, monthStart, now.Location(), pageSize)
-	if err != nil {
-		zap.L().Warn("emby monthly playback totals fetch degraded", zap.Time("month_start", monthStart), zap.Error(err))
-	}
-
-	totals := calculateMonthlyPlaybackFromActivity(entries, monthStart, now.Location())
+	totals := a.localMonthlyPlaybackTotals(monthStart.Unix())
 	a.embyPlaybackMu.Lock()
 	a.embyPlaybackCache = embyPlaybackCacheEntry{
 		monthKey: monthKey,
@@ -1693,102 +1681,49 @@ func (a *App) embyPlaybackSecondsSince(ctx context.Context, embyUsername string,
 	if cached, ok := a.cachedCyclePlayback(cacheKey, now); ok {
 		return cached
 	}
-	// 部分 Emby 实例在 ActivityLog 分页翻到第二页时会稳定返回 500。
-	// 对"单用户最近一个绑定周期"这类窗口型查询，优先放大第一页抓取窗口，
-	// 避免因为分页故障只拿到最新 200 条活动导致分钟数被截断成零头。
-	entries, err := a.embyActivityEntriesSince(ctx, since, now.Location(), 10000)
-	totals := calculateMonthlyPlaybackFromActivity(entries, since, now.Location())
-	total := totals[normalizeActivityPlaybackUser(embyUsername)]
-	if err != nil {
-		zap.L().Warn(
-			"emby playback query degraded",
-			zap.String("emby_username", embyUsername),
-			zap.Time("since", since),
-			zap.Int("activity_entries", len(entries)),
-			zap.Int64("seconds", total),
-			zap.Error(err),
-		)
-		if total == 0 {
-			if cached, ok := a.cachedCyclePlayback(cacheKey, now); ok {
-				return cached
+	total := int64(0)
+	needle := normalizeActivityPlaybackUser(embyUsername)
+	for _, user := range a.store().ListUsers() {
+		for _, key := range []string{user.EmbyUsername, user.Username, user.EmbyID} {
+			if normalizeActivityPlaybackUser(key) == needle {
+				total = a.localPlaybackSecondsForUser(user.UID, since.Unix(), 10000)
+				break
 			}
+		}
+		if total > 0 {
+			break
 		}
 	}
 	a.storeCyclePlayback(cacheKey, total, now)
 	return total
 }
 
-func (a *App) embyActivityEntriesSince(ctx context.Context, since time.Time, loc *time.Location, pageSize int) ([]embyActivityLogEntry, error) {
-	if pageSize <= 0 {
-		pageSize = 200
-	}
-	pageSizes := uniquePositiveInts(pageSize, 5000, 2000, 1000, 500, 200)
-	entries := make([]embyActivityLogEntry, 0, pageSize*4)
-	var firstErr error
-	activePageSize := pageSize
-	for startIndex := 0; ; startIndex += pageSize {
-		var (
-			payload embyActivityLogPayload
-			err     error
-		)
-		if startIndex == 0 {
-			for _, candidate := range pageSizes {
-				path := fmt.Sprintf("/System/ActivityLog/Entries?StartIndex=%d&Limit=%d", startIndex, candidate)
-				err = a.embyGetWithTimeout(ctx, path, &payload, 25*time.Second)
-				if err == nil {
-					activePageSize = candidate
-					break
-				}
-				if firstErr == nil {
-					firstErr = err
-				}
-			}
-		} else {
-			path := fmt.Sprintf("/System/ActivityLog/Entries?StartIndex=%d&Limit=%d", startIndex, activePageSize)
-			err = a.embyGetWithTimeout(ctx, path, &payload, 25*time.Second)
-		}
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			break
-		}
-		if len(payload.Items) == 0 {
-			break
-		}
-		entries = append(entries, payload.Items...)
-		reachedBeforeSince := false
-		for _, item := range payload.Items {
-			parsed, err := parseEmbyActivityTime(item.Date, loc)
-			if err != nil {
-				continue
-			}
-			if parsed.Before(since) {
-				reachedBeforeSince = true
-				break
-			}
-		}
-		if reachedBeforeSince || startIndex+len(payload.Items) >= payload.TotalRecordCount {
-			break
+func (a *App) localPlaybackSecondsForUser(uid int64, since int64, limit int) int64 {
+	total := int64(0)
+	for _, record := range a.store().PlaybackRecords(uid, since, limit) {
+		if record.Duration > 0 {
+			total += embyPlaybackDurationSeconds(record)
 		}
 	}
-	return entries, firstErr
+	return total
 }
 
-func uniquePositiveInts(values ...int) []int {
-	seen := map[int]struct{}{}
-	out := make([]int, 0, len(values))
-	for _, value := range values {
-		if value <= 0 {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
+func (a *App) localMonthlyPlaybackTotals(since int64) map[string]int64 {
+	totals := map[string]int64{}
+	usersByUID := map[int64]store.User{}
+	for _, user := range a.store().ListUsers() {
+		usersByUID[user.UID] = user
 	}
-	return out
+	for _, record := range a.store().PlaybackRecords(0, since, 10000) {
+		user := usersByUID[record.UID]
+		for _, key := range []string{user.EmbyUsername, user.Username, user.EmbyID} {
+			normalized := normalizeActivityPlaybackUser(key)
+			if normalized != "" {
+				totals[normalized] += embyPlaybackDurationSeconds(record)
+			}
+		}
+	}
+	return totals
 }
 
 func (a *App) cachedCyclePlayback(key string, now time.Time) (int64, bool) {

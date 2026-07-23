@@ -5,16 +5,11 @@ import (
 	"net"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/prejudice-studio/twilight/internal/store"
 )
-
-// embyDeviceAuditActivityLimit 控制为补全历史登录 IP 而拉取的活动日志条数。
-// 设备审查是管理员按需触发的低频操作，取较大窗口以尽量覆盖离线设备的来源 IP。
-const embyDeviceAuditActivityLimit = 500
 
 // embyDeviceAuditCacheTTL protects Emby from repeated admin refreshes while
 // keeping quick moderation actions fresh via ?refresh=1.
@@ -284,36 +279,9 @@ func (a *App) buildEmbyDeviceAudit(ctx context.Context) (map[string]any, error) 
 		totalDevices++
 	}
 
-	// 历史登录 IP：活动日志失败降级为「无历史 IP」。
+	// 历史登录 IP 需要读取 Emby ActivityLog，部分 rclone/网盘代理会因此触发
+	// 递归媒体扫描。这里只保留 Sessions 与 Devices 的当前用户/设备数据。
 	activityAvailable := false
-	var actResp struct {
-		Items []map[string]any `json:"Items"`
-	}
-	if err := a.embyGet(ctx, "/System/ActivityLog/Entries?StartIndex=0&Limit="+strconv.Itoa(embyDeviceAuditActivityLimit), &actResp); err == nil {
-		activityAvailable = true
-		for _, e := range actResp.Items {
-			uid := asString(e["UserId"])
-			if uid == "" {
-				continue
-			}
-			ips := activityEntryIPs(asString(e["ShortOverview"]))
-			if len(ips) == 0 {
-				continue
-			}
-			u := getUser(uid)
-			date := asString(e["Date"])
-			eventAt, hasAt := parseEmbyTime(date)
-			for _, ip := range ips {
-				u.ipSet[ip] = true
-				if hasAt {
-					u.authEvents = append(u.authEvents, embyAuthEvent{at: eventAt, ip: ip})
-				}
-			}
-			if date > u.lastSeen {
-				u.lastSeen = date
-			}
-		}
-	}
 
 	linked := 0
 	allIPs := map[string]bool{}
