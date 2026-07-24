@@ -3,6 +3,7 @@ package store
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestPlaybackRecordsFiltersDefaultsAndLimits(t *testing.T) {
@@ -68,5 +69,38 @@ func TestPlaybackRecordsPruneToMax(t *testing.T) {
 	latest := st.PlaybackRecords(1, 0, 1)
 	if len(latest) != 1 || latest[0].ItemID != "new" {
 		t.Fatalf("unexpected latest record after prune: %#v", latest)
+	}
+}
+
+func TestUpsertLivePlaybackRecordMergesProgress(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	changed, err := st.UpsertLivePlaybackRecord(PlaybackRecord{UID: 1, ItemID: "episode-live", Title: "第 1 集", MediaType: "Video", Duration: 60, PlayedAt: 1000}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("expected first live record insert")
+	}
+	changed, err = st.UpsertLivePlaybackRecord(PlaybackRecord{UID: 1, ItemID: "episode-live", Duration: 120, PlayedAt: 1020}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("expected live record duration update")
+	}
+	records := st.PlaybackRecords(1, 0, 10)
+	if len(records) != 1 {
+		t.Fatalf("expected one merged record, got %d: %#v", len(records), records)
+	}
+	if records[0].Duration != 120 {
+		t.Fatalf("duration=%d want=120", records[0].Duration)
+	}
+	if records[0].PlayedAt != 1000 {
+		t.Fatalf("played_at=%d want=1000", records[0].PlayedAt)
 	}
 }

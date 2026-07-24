@@ -49,6 +49,79 @@ func (s *Store) AddPlaybackRecordIdempotent(record PlaybackRecord) (bool, error)
 	return true, nil
 }
 
+func (s *Store) UpsertLivePlaybackRecord(record PlaybackRecord, mergeWindow time.Duration) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.refreshLocked(); err != nil {
+		return false, err
+	}
+	if record.UID == 0 || record.ItemID == "" || record.Duration <= 0 {
+		return false, nil
+	}
+	if record.PlayedAt == 0 {
+		record.PlayedAt = time.Now().Unix()
+	}
+	if mergeWindow <= 0 {
+		mergeWindow = 12 * time.Hour
+	}
+	mergeSeconds := int64(mergeWindow / time.Second)
+	for i, existing := range s.state.PlaybackRecords {
+		if existing.UID != record.UID || existing.ItemID != record.ItemID {
+			continue
+		}
+		delta := existing.PlayedAt - record.PlayedAt
+		if delta < 0 {
+			delta = -delta
+		}
+		if delta > mergeSeconds {
+			continue
+		}
+		changed := false
+		if record.Duration > existing.Duration {
+			s.state.PlaybackRecords[i].Duration = record.Duration
+			changed = true
+		}
+		if record.PlayedAt < existing.PlayedAt {
+			s.state.PlaybackRecords[i].PlayedAt = record.PlayedAt
+			changed = true
+		}
+		if record.Title != "" && existing.Title == "" {
+			s.state.PlaybackRecords[i].Title = record.Title
+			changed = true
+		}
+		if record.SeriesName != "" && existing.SeriesName == "" {
+			s.state.PlaybackRecords[i].SeriesName = record.SeriesName
+			changed = true
+		}
+		if record.MediaType != "" && existing.MediaType == "" {
+			s.state.PlaybackRecords[i].MediaType = record.MediaType
+			changed = true
+		}
+		if record.IndexNumber != 0 && existing.IndexNumber == 0 {
+			s.state.PlaybackRecords[i].IndexNumber = record.IndexNumber
+			changed = true
+		}
+		if !changed {
+			return false, nil
+		}
+		updated := s.state.PlaybackRecords[i]
+		copy(s.state.PlaybackRecords[1:i+1], s.state.PlaybackRecords[0:i])
+		s.state.PlaybackRecords[0] = updated
+		if err := s.saveLocked(); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	s.state.PlaybackRecords = append([]PlaybackRecord{record}, s.state.PlaybackRecords...)
+	if len(s.state.PlaybackRecords) > maxStoredPlaybackRecords {
+		s.state.PlaybackRecords = s.state.PlaybackRecords[:maxStoredPlaybackRecords]
+	}
+	if err := s.saveLocked(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (s *Store) PlaybackRecords(uid int64, since int64, limit int) []PlaybackRecord {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

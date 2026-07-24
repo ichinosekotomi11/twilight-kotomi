@@ -257,11 +257,16 @@ func TestEmbyMonthlyPlaybackSummaryIncludesLiveSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	var paths []string
+	var calls int64
 	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path != "/Sessions" {
 			http.NotFound(w, r)
+			return
+		}
+		if atomic.AddInt64(&calls, 1) > 1 {
+			_, _ = w.Write([]byte(`[]`))
 			return
 		}
 		_, _ = w.Write([]byte(`[
@@ -285,6 +290,10 @@ func TestEmbyMonthlyPlaybackSummaryIncludesLiveSession(t *testing.T) {
 	}
 	if summary.Label != "25分钟" {
 		t.Fatalf("monthly playback label=%q want %q", summary.Label, "25分钟")
+	}
+	afterStop := app.embyMonthlyPlaybackSummary(context.Background(), user, now.Add(time.Minute))
+	if afterStop.Seconds != 1500 {
+		t.Fatalf("monthly playback after live session disappeared=%d want=1500", afterStop.Seconds)
 	}
 	for _, path := range paths {
 		if strings.Contains(path, "ActivityLog") || strings.Contains(path, "Items") {

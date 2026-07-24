@@ -21,6 +21,7 @@ import (
 	"github.com/prejudice-studio/twilight/internal/security"
 	"github.com/prejudice-studio/twilight/internal/store"
 	"github.com/prejudice-studio/twilight/internal/validate"
+	"go.uber.org/zap"
 )
 
 var telegramPublicUsernamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{4,31}$`)
@@ -1617,8 +1618,8 @@ type embyActivityLogEntry struct {
 
 func (a *App) embyMonthlyPlaybackSummary(ctx context.Context, user store.User, now time.Time) embyMonthlyPlayback {
 	cycle := a.embyPlaybackCycle(user, now, 30)
+	a.persistLivePlaybackRecords(a.embyLivePlaybackRecords(ctx, now))
 	totalSeconds := a.localPlaybackSecondsForUser(user.UID, cycle.Start.Unix(), 10000)
-	totalSeconds += a.livePlaybackSecondsForUser(ctx, user.UID, cycle.Start, now)
 	return embyMonthlyPlayback{
 		Seconds: totalSeconds,
 		Minutes: (totalSeconds + 59) / 60,
@@ -1754,6 +1755,14 @@ func (a *App) livePlaybackSecondsForUser(ctx context.Context, uid int64, since, 
 		}
 	}
 	return total
+}
+
+func (a *App) persistLivePlaybackRecords(records []store.PlaybackRecord) {
+	for _, record := range records {
+		if _, err := a.store().UpsertLivePlaybackRecord(record, 12*time.Hour); err != nil {
+			zap.L().Warn("failed to persist live Emby playback progress", zap.Int64("uid", record.UID), zap.String("item_id", record.ItemID), zap.Error(err))
+		}
+	}
 }
 
 func (a *App) cachedCyclePlayback(key string, now time.Time) (int64, bool) {
