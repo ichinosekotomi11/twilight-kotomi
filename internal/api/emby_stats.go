@@ -160,7 +160,11 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 	cacheKey := fmt.Sprintf("%s|%d|%d", window.Period, window.Start.Unix(), limit)
 	records := a.store().PlaybackRecords(0, window.Start.Unix(), 10000)
 	localRecords := filterPlaybackRecordsForWindow(records, window)
+	liveRecords := filterPlaybackRecordsForWindow(a.embyLivePlaybackRecords(ctx, now), window)
 	source := "local_playback_records"
+	if len(liveRecords) > 0 {
+		source = "local_playback_records+live_sessions"
+	}
 	seriesBuckets := map[string]*embyRankBucket{}
 	movieBuckets := map[string]*embyRankBucket{}
 	userBuckets := map[int64]*embyUserBucket{}
@@ -175,6 +179,7 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 		}
 	}
 	addPlaybackRecordsToStats(localRecords, userByUID, seriesBuckets, movieBuckets, userBuckets)
+	addPlaybackRecordsToStats(liveRecords, userByUID, seriesBuckets, movieBuckets, userBuckets)
 	toRankEntries := func(buckets map[string]*embyRankBucket) []embyRankEntry {
 		items := make([]embyRankEntry, 0, len(buckets))
 		for _, bucket := range buckets {
@@ -236,6 +241,7 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 			"timezone":                window.Start.Location().String(),
 			"local_records_raw":       len(records),
 			"local_records_in_window": len(localRecords),
+			"live_session_records":    len(liveRecords),
 			"activity_entries":        0,
 			"activity_events":         0,
 			"activity_disabled":       true,
@@ -251,6 +257,7 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 		zap.Time("start", window.Start),
 		zap.Time("end", window.End),
 		zap.Int("local_records", len(localRecords)),
+		zap.Int("live_session_records", len(liveRecords)),
 		zap.Bool("activity_disabled", true),
 		zap.Int("series_buckets", len(seriesBuckets)),
 		zap.Int("movie_buckets", len(movieBuckets)),
@@ -258,6 +265,60 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 	)
 	a.storeEmbyStats(cacheKey, result, now)
 	return result
+}
+
+func (a *App) embyLivePlaybackRecords(ctx context.Context, now time.Time) []store.PlaybackRecord {
+	if !a.embyConfigured() {
+		return nil
+	}
+	sessionsCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	var sessions []map[string]any
+	if err := a.embyGet(sessionsCtx, "/Sessions", &sessions); err != nil {
+		zap.L().Warn("failed to read Emby sessions for live playback stats", zap.Error(err))
+		return nil
+	}
+	records := make([]store.PlaybackRecord, 0, len(sessions))
+	for _, session := range sessions {
+		item, _ := session["NowPlayingItem"].(map[string]any)
+		if item == nil {
+			continue
+		}
+		local, ok := a.store().FindUserByEmbyID(asString(session["UserId"]))
+		if !ok {
+			continue
+		}
+		duration := embySessionPlaybackSeconds(session, item)
+		if duration <= 0 {
+			continue
+		}
+		records = append(records, store.PlaybackRecord{
+			UID:         local.UID,
+			ItemID:      firstNonEmpty(asString(item["Id"]), asString(item["ID"])),
+			Title:       firstNonEmpty(asString(item["Name"]), asString(item["SeriesName"])),
+			SeriesName:  asString(item["SeriesName"]),
+			MediaType:   asString(item["Type"]),
+			IndexNumber: int(intValue(item, "IndexNumber", 0)),
+			Duration:    duration,
+			PlayedAt:    now.Unix(),
+		})
+	}
+	return records
+}
+
+func embySessionPlaybackSeconds(session map[string]any, item map[string]any) int64 {
+	if playState, ok := session["PlayState"].(map[string]any); ok {
+		if seconds := numeric(playState["PositionTicks"]) / 10000000; seconds > 0 {
+			return seconds
+		}
+	}
+	if seconds := numeric(session["PlaybackPositionTicks"]) / 10000000; seconds > 0 {
+		return seconds
+	}
+	if seconds := numeric(item["RunTimeTicks"]) / 10000000; seconds > 0 {
+		return seconds
+	}
+	return 0
 }
 
 func (a *App) cachedEmbyStats(key string, now time.Time) (embyStatsResult, bool) {

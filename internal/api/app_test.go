@@ -3518,6 +3518,99 @@ func TestBangumiWebhookIdempotentReplay(t *testing.T) {
 	}
 }
 
+func TestEmbyStatsMergeLiveSessionsWithoutActivityLogOrLocalWrites(t *testing.T) {
+	app := newTestApp(t)
+	user, err := app.store().CreateUser(store.User{
+		Username:     "live-user",
+		Role:         store.RoleNormal,
+		Active:       true,
+		EmbyID:       "emby-live",
+		EmbyUsername: "fantasy",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/Sessions" {
+			http.Error(w, "unexpected path", http.StatusTeapot)
+			return
+		}
+		_, _ = w.Write([]byte(`[
+			{
+				"Id":"session-live",
+				"UserId":"emby-live",
+				"UserName":"fantasy",
+				"Client":"SenPlayer",
+				"NowPlayingItem":{"Id":"ep-1","Name":"第 1 集","SeriesName":"Live Show","Type":"Episode","IndexNumber":1},
+				"PlayState":{"PositionTicks":9000000000}
+			}
+		]`))
+	}))
+	defer emby.Close()
+	app.cfg().EmbyURL = emby.URL
+	app.cfg().EmbyToken = "test-token"
+
+	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.Local)
+	result := app.embyStatsDataDetailed(context.Background(), embyStatsPeriodDaily, now, 10)
+	if len(result.SeriesTop) != 1 || result.SeriesTop[0].Title != "Live Show" {
+		t.Fatalf("expected live session series stat, got %#v", result.SeriesTop)
+	}
+	if result.SeriesTop[0].TotalSeconds != 900 {
+		t.Fatalf("live session duration = %d, want 900", result.SeriesTop[0].TotalSeconds)
+	}
+	if len(result.UserMinutes) != 1 || result.UserMinutes[0].UID != user.UID || result.UserMinutes[0].TotalSeconds != 900 {
+		t.Fatalf("expected live user minutes, got %#v", result.UserMinutes)
+	}
+	for _, path := range paths {
+		if strings.Contains(path, "ActivityLog") || strings.Contains(path, "Items") {
+			t.Fatalf("live stats should only read sessions, got path %s", path)
+		}
+	}
+	if records := app.store().PlaybackRecords(user.UID, 0, 10); len(records) != 0 {
+		t.Fatalf("live stats must not persist playback records, got %#v", records)
+	}
+}
+
+func TestEmbyPlaybackSecondsSinceIncludesLiveSession(t *testing.T) {
+	app := newTestApp(t)
+	_, err := app.store().CreateUser(store.User{
+		Username:     "cycle-user",
+		Role:         store.RoleNormal,
+		Active:       true,
+		EmbyID:       "emby-cycle",
+		EmbyUsername: "cycle",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/Sessions" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`[
+			{
+				"UserId":"emby-cycle",
+				"NowPlayingItem":{"Id":"movie-live","Name":"Live Movie","Type":"Movie"},
+				"PlayState":{"PositionTicks":12000000000}
+			}
+		]`))
+	}))
+	defer emby.Close()
+	app.cfg().EmbyURL = emby.URL
+	app.cfg().EmbyToken = "test-token"
+
+	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.Local)
+	got := app.embyPlaybackSecondsSince(context.Background(), "cycle", now.Add(-time.Hour), now)
+	if got != 1200 {
+		t.Fatalf("playback seconds with live session = %d, want 1200", got)
+	}
+}
+
 // TestBangumiWebhookConstantTimeStringEqual 锁定 R58-1 timing oracle 收紧:
 // length-mismatch 不能再通过 ConstantTimeCompare 提前 return 触发。直接调
 // 用 helper 验证逻辑等价性(timing 行为靠 zero-pad 实现,Go 测试框架不便

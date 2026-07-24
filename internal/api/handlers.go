@@ -1657,6 +1657,7 @@ func (a *App) embyMonthlyPlaybackTotals(ctx context.Context, now time.Time) map[
 	if cached.monthKey == monthKey && now.Sub(cached.checked) < 10*time.Minute {
 		out := cloneInt64Map(cached.byUser)
 		a.embyPlaybackMu.Unlock()
+		a.addLivePlaybackTotals(ctx, out, now)
 		return out
 	}
 	a.embyPlaybackMu.Unlock()
@@ -1670,6 +1671,7 @@ func (a *App) embyMonthlyPlaybackTotals(ctx context.Context, now time.Time) map[
 		byUser:   cloneInt64Map(totals),
 	}
 	a.embyPlaybackMu.Unlock()
+	a.addLivePlaybackTotals(ctx, totals, now)
 	return totals
 }
 
@@ -1687,6 +1689,7 @@ func (a *App) embyPlaybackSecondsSince(ctx context.Context, embyUsername string,
 		for _, key := range []string{user.EmbyUsername, user.Username, user.EmbyID} {
 			if normalizeActivityPlaybackUser(key) == needle {
 				total = a.localPlaybackSecondsForUser(user.UID, since.Unix(), 10000)
+				total += a.livePlaybackSecondsForUser(ctx, user.UID, since, now)
 				break
 			}
 		}
@@ -1724,6 +1727,32 @@ func (a *App) localMonthlyPlaybackTotals(since int64) map[string]int64 {
 		}
 	}
 	return totals
+}
+
+func (a *App) addLivePlaybackTotals(ctx context.Context, totals map[string]int64, now time.Time) {
+	usersByUID := map[int64]store.User{}
+	for _, user := range a.store().ListUsers() {
+		usersByUID[user.UID] = user
+	}
+	for _, record := range a.embyLivePlaybackRecords(ctx, now) {
+		user := usersByUID[record.UID]
+		for _, key := range []string{user.EmbyUsername, user.Username, user.EmbyID} {
+			normalized := normalizeActivityPlaybackUser(key)
+			if normalized != "" {
+				totals[normalized] += embyPlaybackDurationSeconds(record)
+			}
+		}
+	}
+}
+
+func (a *App) livePlaybackSecondsForUser(ctx context.Context, uid int64, since, now time.Time) int64 {
+	total := int64(0)
+	for _, record := range a.embyLivePlaybackRecords(ctx, now) {
+		if record.UID == uid && !time.Unix(record.PlayedAt, 0).Before(since) {
+			total += embyPlaybackDurationSeconds(record)
+		}
+	}
+	return total
 }
 
 func (a *App) cachedCyclePlayback(key string, now time.Time) (int64, bool) {
