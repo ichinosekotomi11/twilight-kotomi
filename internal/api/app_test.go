@@ -3544,7 +3544,7 @@ func TestEmbyStatsMergeLiveSessionsWithoutActivityLogOrLocalWrites(t *testing.T)
 				"UserId":"emby-live",
 				"UserName":"fantasy",
 				"Client":"SenPlayer",
-				"NowPlayingItem":{"Id":"ep-1","Name":"第 1 集","SeriesName":"Live Show","Type":"Episode","IndexNumber":1},
+				"NowPlayingItem":{"Id":"episode-third-party","Name":"第 1 集","Type":"Video","IndexNumber":1},
 				"PlayState":{"PositionTicks":9000000000}
 			}
 		]`))
@@ -3555,7 +3555,7 @@ func TestEmbyStatsMergeLiveSessionsWithoutActivityLogOrLocalWrites(t *testing.T)
 
 	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.Local)
 	result := app.embyStatsDataDetailed(context.Background(), embyStatsPeriodDaily, now, 10)
-	if len(result.SeriesTop) != 1 || result.SeriesTop[0].Title != "Live Show" {
+	if len(result.SeriesTop) != 1 || result.SeriesTop[0].Title != "第 1 集" {
 		t.Fatalf("expected live session series stat, got %#v", result.SeriesTop)
 	}
 	if result.SeriesTop[0].TotalSeconds != 900 {

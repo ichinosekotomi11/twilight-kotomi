@@ -145,6 +145,13 @@ func embyMediaRankType(record store.PlaybackRecord) string {
 	case "episode", "series":
 		return "series"
 	default:
+		itemID := strings.ToLower(strings.TrimSpace(record.ItemID))
+		if strings.HasPrefix(itemID, "episode-") || strings.HasPrefix(itemID, "series-") {
+			return "series"
+		}
+		if strings.HasPrefix(itemID, "movie-") {
+			return "movie"
+		}
 		return ""
 	}
 }
