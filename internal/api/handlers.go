@@ -1618,6 +1618,7 @@ type embyActivityLogEntry struct {
 func (a *App) embyMonthlyPlaybackSummary(ctx context.Context, user store.User, now time.Time) embyMonthlyPlayback {
 	cycle := a.embyPlaybackCycle(user, now, 30)
 	totalSeconds := a.localPlaybackSecondsForUser(user.UID, cycle.Start.Unix(), 10000)
+	totalSeconds += a.livePlaybackSecondsForUser(ctx, user.UID, cycle.Start, now)
 	return embyMonthlyPlayback{
 		Seconds: totalSeconds,
 		Minutes: (totalSeconds + 59) / 60,

@@ -242,6 +242,57 @@ func TestEmbyPlaybackCycleStart(t *testing.T) {
 	}
 }
 
+func TestEmbyMonthlyPlaybackSummaryIncludesLiveSession(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Date(2026, time.July, 24, 12, 0, 0, 0, time.Local)
+	user, err := app.store().CreateUser(store.User{
+		Username:     "cycle-live",
+		Role:         store.RoleNormal,
+		Active:       true,
+		EmbyID:       "emby-cycle-live",
+		EmbyUsername: "cycle-live",
+		EmbyBoundAt:  now.Add(-24 * time.Hour).Unix(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/Sessions" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`[
+			{
+				"UserId":"emby-cycle-live",
+				"NowPlayingItem":{"Id":"episode-third-party","Name":"第 3 集","Type":"Video"},
+				"PlayState":{"PositionTicks":15000000000}
+			}
+		]`))
+	}))
+	defer emby.Close()
+	app.cfg().EmbyURL = emby.URL
+	app.cfg().EmbyToken = "test-token"
+
+	summary := app.embyMonthlyPlaybackSummary(context.Background(), user, now)
+	if summary.Seconds != 1500 {
+		t.Fatalf("monthly playback seconds=%d want=1500", summary.Seconds)
+	}
+	if summary.Minutes != 25 {
+		t.Fatalf("monthly playback minutes=%d want=25", summary.Minutes)
+	}
+	if summary.Label != "25分钟" {
+		t.Fatalf("monthly playback label=%q want %q", summary.Label, "25分钟")
+	}
+	for _, path := range paths {
+		if strings.Contains(path, "ActivityLog") || strings.Contains(path, "Items") {
+			t.Fatalf("summary should only read sessions, got path %s", path)
+		}
+	}
+}
+
 func TestFormatPlaybackDuration(t *testing.T) {
 	cases := []struct {
 		seconds int64
