@@ -1007,7 +1007,7 @@ export default function AdminConfigPage() {
   );
   const [activeSection, setActiveSection] = useState("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [updateRepoUrl, setUpdateRepoUrl] = useState("https://github.com/Prejudice-Studio/Twilight.git");
+  const [updateRepoUrl, setUpdateRepoUrl] = useState("https://github.com/ichinosekotomi11/twilight-kotomi.git");
   const [updateBranch, setUpdateBranch] = useState("main");
   const [updateRestartServices, setUpdateRestartServices] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -2237,7 +2237,7 @@ export default function AdminConfigPage() {
                       id="update-repo-url"
                       value={updateRepoUrl}
                       onChange={(e) => setUpdateRepoUrl(e.target.value)}
-                      placeholder="https://github.com/Prejudice-Studio/Twilight.git"
+                      placeholder="https://github.com/ichinosekotomi11/twilight-kotomi.git"
                     />
                   </div>
                   <div className="space-y-2">

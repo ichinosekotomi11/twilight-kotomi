@@ -29,7 +29,7 @@ Twilight 提供完整的 Docker 支持，包含 PostgreSQL + Redis + Go 后端 +
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/Prejudice-Studio/Twilight.git
+git clone https://github.com/ichinosekotomi11/twilight-kotomi.git
 cd Twilight
 ```
 
@@ -88,7 +88,7 @@ docker compose ps
 │              :443 HTTPS → 内部路由                    │
 ├──────────────┬──────────────────┬───────────────────┤
 │              │                  │                    │
-│  twilight-webui   twilight-backend   postgres:5432  │
+│ twilight-kotomi-webui  twilight-backend postgres:5432 │
 │  (Next.js :3000)  (Go API :5000)    redis:6379      │
 │              │                  │                    │
 │              └──────┬───────────┘                    │

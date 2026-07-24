@@ -1675,7 +1675,7 @@ curl -N "http://localhost:5000/api/v1/system/admin/runtime/logs/stream?limit=100
 
 ```json
 {
-  "repo_url": "https://github.com/Prejudice-Studio/Twilight.git",
+  "repo_url": "https://github.com/ichinosekotomi11/twilight-kotomi.git",
   "branch": "golang",
   "dry_run": true,
   "restart_services": true

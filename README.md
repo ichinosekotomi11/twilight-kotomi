@@ -2,21 +2,23 @@
 
 ![Twilight Logo](Twilight%20Logo.png)
 
-# Twilight 暮光
+# twilight-kotomi
 
-面向 Emby / Jellyfin 的用户、邀请、卡码、Bot 与运维管理面板。
+一之濑琴美媒体站使用的 Emby / Jellyfin 用户、卡码、Telegram Bot 与运维管理面板。
 
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
-[文档中心](docs/README.md) · [安装部署](docs/guides/install.md) · [Docker 部署](docs/guides/docker.md) · [Telegram 频道](https://t.me/Twilightpanel) · [Telegram 群组](https://t.me/TwilightPanelChat)
+[文档中心](docs/README.md) · [安装部署](docs/guides/install.md) · [Docker 部署](docs/guides/docker.md) · [API 文档](docs/reference/backend-api.md)
 
 </div>
 
 ## 项目定位
 
-Twilight 是一个 Go 后端 + Next.js 前端的 Emby / Jellyfin 用户管理系统，适合需要注册审核、卡码续期、邀请关系、Telegram Bot 绑定、设备/IP 审查和后台运维能力的媒体服务器站点。
+`twilight-kotomi` 是基于 Twilight 深度改造的媒体站后端与管理面板，面向 Emby / Jellyfin 站点的日常运营：账号开通、注册码续期、邀请体系、Telegram 绑定、第三方播放器兼容、播放统计、权限审计和自动化运维。
+
+这版更偏向实际站点长期运行：后端优先读取用户、会话和本地播放记录，不再依赖 Emby `ActivityLog/Entries` 拉取统计，避免媒体库和网盘挂载被后台统计持续扫描。
 
 当前主线架构：
 
@@ -31,6 +33,7 @@ Twilight 是一个 Go 后端 + Next.js 前端的 Emby / Jellyfin 用户管理系
 | ---- | ---- |
 | 用户管理 | 注册、登录、续期、禁用、删除、白名单、邮箱验证、设备与登录记录 |
 | 媒体服务 | Emby / Jellyfin 账号绑定、开通、解绑、同步、线路下发、播放统计 |
+| 第三方播放器 | 适配 SenPlayer、Infuse、Forward、RodelPlayer 等第三方客户端的在线会话、媒体排序、观看状态与实时播放统计 |
 | 卡码体系 | 注册码、续期码、白名单码、诱饵码、指名码、批量生成、使用审计 |
 | 邀请系统管理 | 邀请码、续期邀请、邀请关系树、搜索、统计、管理员审查 |
 | Telegram | Bot 绑定、通知、换绑审核、群组成员审查、自定义命令与开发者模式沙箱 |
@@ -38,13 +41,23 @@ Twilight 是一个 Go 后端 + Next.js 前端的 Emby / Jellyfin 用户管理系
 | 安全中心 | 操作审计、实时日志、违规风控、设备/IP 审查入口、安全配置管理 |
 | 运维后台 | 管理导航、配置热重载、数据库备份/恢复/迁移、调度任务、Git 更新 |
 
+## Kotomi 改造重点
+
+- 后端账号生命周期：支持本地面板账号与 Emby 账号联动开通、禁用、解绑、删除和密码找回。
+- 注册码体系：支持注册、续期、白名单、邀请、指名用户、容量限制和使用审计。
+- 第三方播放器兼容：针对 SenPlayer / Infuse / Forward / RodelPlayer 等客户端补齐排序、观看状态、收藏/喜欢和实时播放数据兼容入口。
+- 实时统计：今日榜、用户播放排行和本周期播放时长会合并 Emby `/Sessions` 当前播放数据。
+- 低 IO 统计：禁用 Emby `ActivityLog/Entries` 统计路径，避免后台读取活动日志时触发网盘递归扫描。
+- 下载权限控制：后端按本地账号权限拦截第三方播放器触发的下载行为。
+- 运维安全：敏感配置脱敏、后台实时日志、数据库备份恢复、系统更新和 systemd 三服务部署。
+
 ## 快速开始
 
 ### Docker Compose
 
 ```bash
-git clone https://github.com/Prejudice-Studio/Twilight.git
-cd Twilight
+git clone https://github.com/ichinosekotomi11/twilight-kotomi.git
+cd twilight-kotomi
 cp deploy/docker/config.docker.toml config.toml
 cp deploy/docker/.env.example .env
 
@@ -154,18 +167,18 @@ cd webui && pnpm lint && pnpm build
 
 <div align="center">
 
-[![Contributors](https://contrib.rocks/image?repo=Prejudice-Studio/Twilight)](https://github.com/Prejudice-Studio/Twilight/graphs/contributors)
+[![Contributors](https://contrib.rocks/image?repo=ichinosekotomi11/twilight-kotomi)](https://github.com/ichinosekotomi11/twilight-kotomi/graphs/contributors)
 
 </div>
 
 ## Star
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Prejudice-Studio/Twilight&type=Date)](https://star-history.com/#Prejudice-Studio/Twilight&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=ichinosekotomi11/twilight-kotomi&type=Date)](https://star-history.com/#ichinosekotomi11/twilight-kotomi&Date)
 
 <div align="center">
 
-如果 Twilight 对你有帮助，欢迎点一个 Star。
+如果 `twilight-kotomi` 对你有帮助，欢迎点一个 Star。
 
-Made by [Prejudice Studio](https://github.com/Prejudice-Studio/)
+Maintained by [ichinosekotomi11](https://github.com/ichinosekotomi11/).
 
 </div>

@@ -5,7 +5,7 @@ import { GithubIcon } from "@/components/icons/github-icon";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
-export const GITHUB_PROJECT_URL = "https://github.com/Prejudice-Studio/Twilight";
+export const GITHUB_PROJECT_URL = "https://github.com/ichinosekotomi11/twilight-kotomi";
 
 interface GithubProjectLinkProps {
   className?: string;

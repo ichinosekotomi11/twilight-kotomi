@@ -1,4 +1,4 @@
-# Twilight Web UI
+# twilight-kotomi Web UI
 
 基于 Next.js 16 + TypeScript + Tailwind CSS 的现代化 Web 管理界面。
 
@@ -49,10 +49,10 @@ pnpm install --frozen-lockfile
 NEXT_PUBLIC_API_URL=
 
 # 站点名称（用于页面信息 fallback）
-NEXT_PUBLIC_SITE_NAME=Twilight
+NEXT_PUBLIC_SITE_NAME=twilight-kotomi
 
 # 浏览器标题（未配置时默认: ${NEXT_PUBLIC_SITE_NAME} - Emby 管理系统）
-NEXT_PUBLIC_SITE_TITLE=Twilight - Emby 管理系统
+NEXT_PUBLIC_SITE_TITLE=twilight-kotomi - Emby 管理系统
 
 # 浏览器描述（未配置时默认: ${NEXT_PUBLIC_SITE_NAME} 的 Emby/Jellyfin 管理系统）
 NEXT_PUBLIC_SITE_DESCRIPTION=一个功能完善的 Emby/Jellyfin 用户管理系统
@@ -66,7 +66,7 @@ NEXT_PUBLIC_SITE_ICON=/favicon.ico
 | 变量名 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | NEXT_PUBLIC_API_URL | 否 | 空（同源 `/api`） | 前端请求后端 API 的基地址；生产分离部署时填写后端 URL |
-| NEXT_PUBLIC_SITE_NAME | 否 | Twilight | 站点名称，用于登录/注册/首页等页面信息 fallback |
+| NEXT_PUBLIC_SITE_NAME | 否 | twilight-kotomi | 站点名称，用于登录/注册/首页等页面信息 fallback |
 | NEXT_PUBLIC_SITE_TITLE | 否 | ${NEXT_PUBLIC_SITE_NAME} - Emby 管理系统 | 浏览器标签标题（title） |
 | NEXT_PUBLIC_SITE_DESCRIPTION | 否 | ${NEXT_PUBLIC_SITE_NAME} 的 Emby/Jellyfin 管理系统 | 页面描述（meta description） |
 | NEXT_PUBLIC_SITE_ICON | 否 | 空 | 浏览器图标 URL，会写入 metadata icons |

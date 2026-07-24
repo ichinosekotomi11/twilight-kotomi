@@ -1,11 +1,11 @@
 # ============================================================================
-# Twilight WebUI — Next.js standalone Docker build
+# twilight-kotomi WebUI — Next.js standalone Docker build
 # ============================================================================
 # Build:
-#   docker build -t twilight-webui -f webui/Dockerfile webui/
+#   docker build -t twilight-kotomi-webui -f webui/Dockerfile webui/
 #
 # Run:
-#   docker run -e NEXT_PUBLIC_API_URL=https://api.example.com twilight-webui
+#   docker run -e NEXT_PUBLIC_API_URL=https://api.example.com twilight-kotomi-webui
 #
 # The backend API base URL MUST be set via NEXT_PUBLIC_API_URL at build time
 # (Next.js bakes it into the JS bundle). If you need runtime-dynamic API URLs,
