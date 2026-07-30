@@ -1619,6 +1619,7 @@ type embyActivityLogEntry struct {
 func (a *App) embyMonthlyPlaybackSummary(ctx context.Context, user store.User, now time.Time) embyMonthlyPlayback {
 	cycle := a.embyPlaybackCycle(user, now, 30)
 	a.persistLivePlaybackRecords(a.embyLivePlaybackRecords(ctx, now))
+	a.syncRecentEmbyPlaybackForUser(ctx, user, cycle.Start, embyRecentPlaybackDefaultLimit)
 	totalSeconds := a.localPlaybackSecondsForUser(user.UID, cycle.Start.Unix(), 10000)
 	return embyMonthlyPlayback{
 		Seconds: totalSeconds,
@@ -2205,6 +2206,19 @@ func (a *App) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request, para
 				return
 			}
 		}
+		if desiredRole == store.RoleWhitelist {
+			if _, err := a.store().UpdateUser(uid, func(u *store.User) error {
+				u.Active = true
+				u.ExpiredAt = permanentExpiryUnix
+				u.RetentionExpiredAt = 0
+				u.RetentionGraceUntil = 0
+				return nil
+			}); err != nil {
+				if statusFromError(w, err) {
+					return
+				}
+			}
+		}
 	}
 	embySyncFailed := false
 	if hasActive {
@@ -2353,9 +2367,11 @@ func (a *App) handleAdminToggleUser(w http.ResponseWriter, r *http.Request, para
 		failWithCode(w, http.StatusForbidden, ErrUserProtected, "无法禁用自己的账号")
 		return
 	}
-	if target, okUser := a.store().User(uid); okUser && a.userIsProtected(target) && target.UID != currentUID {
-		failWithCode(w, http.StatusForbidden, ErrUserProtected, "cannot operate on protected user")
-		return
+	if !enable {
+		if target, okUser := a.store().User(uid); okUser && a.userIsProtected(target) && target.UID != currentUID {
+			failWithCode(w, http.StatusForbidden, ErrUserProtected, "cannot operate on protected user")
+			return
+		}
 	}
 	payload := decodeMap(r)
 	depth := intValue(payload, "cascade_depth", queryInt(r, "cascade_depth", 1))
@@ -2369,9 +2385,11 @@ func (a *App) handleAdminToggleUser(w http.ResponseWriter, r *http.Request, para
 	failed := []map[string]any{}
 	embyFailed := []map[string]any{}
 	for _, targetUID := range a.collectCascadeUIDs(uid, depth) {
-		if target, okUser := a.store().User(targetUID); okUser && a.userIsProtected(target) && target.UID != currentUID {
-			skipped = append(skipped, map[string]any{"uid": targetUID, "reason": a.protectedUserReason(target)})
-			continue
+		if !enable {
+			if target, okUser := a.store().User(targetUID); okUser && a.userIsProtected(target) && target.UID != currentUID {
+				skipped = append(skipped, map[string]any{"uid": targetUID, "reason": a.protectedUserReason(target)})
+				continue
+			}
 		}
 		// 走 SetUserActiveAtomic：禁用最后一个 active admin 时返回 ErrLastAdmin，
 		// 在级联场景下被记入 skipped 而不是悄悄通过。
@@ -3168,7 +3186,7 @@ func (a *App) handleExpiringUsers(w http.ResponseWriter, r *http.Request, _ Para
 	now := time.Now().Unix()
 	items := []map[string]any{}
 	for _, u := range a.store().ListUsers() {
-		if u.ExpiredAt > now && u.ExpiredAt <= deadline {
+		if userShouldReceiveExpiryReminder(u, now, deadline) {
 			remaining := u.ExpiredAt - now
 			items = append(items, map[string]any{"uid": u.UID, "username": u.Username, "telegram_id": nullableInt(u.TelegramID), "expired_at": u.ExpiredAt, "remaining_seconds": remaining, "remaining_str": formatSeconds(remaining)})
 		}

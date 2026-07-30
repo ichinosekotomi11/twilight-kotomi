@@ -338,6 +338,8 @@ func userExpiredOnly(user store.User) bool {
 // 调用约定：必须在 store().UpdateUser 的 mutator 闭包内传入指针，以保证锁内原子性。
 func renewExpiryAndReactivate(u *store.User, newExpiredAt int64) {
 	u.ExpiredAt = newExpiredAt
+	u.RetentionGraceUntil = 0
+	u.RetentionExpiredAt = 0
 	if expiryIsPermanent(newExpiredAt) || newExpiredAt > time.Now().Unix() {
 		u.Active = true
 	}

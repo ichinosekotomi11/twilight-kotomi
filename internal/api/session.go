@@ -109,17 +109,24 @@ func (s *sessionStore) pgDB() *sql.DB {
 }
 
 func (s *sessionStore) Create(ctx context.Context, uid int64) (string, time.Time, error) {
+	return s.CreateWithTTL(ctx, uid, s.ttl)
+}
+
+func (s *sessionStore) CreateWithTTL(ctx context.Context, uid int64, ttl time.Duration) (string, time.Time, error) {
+	if ttl <= 0 {
+		ttl = s.ttl
+	}
 	token, err := security.RandomHex(32)
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	expires := time.Now().Add(s.ttl)
+	expires := time.Now().Add(ttl)
 	record := sessionRecord{UID: uid, ExpiresAt: expires.Unix()}
 
 	redisOK := false
 	if s.redis != nil {
 		payload, _ := json.Marshal(record)
-		if err := s.redis.SetEX(ctx, s.prefix+token, int(s.ttl/time.Second), string(payload)); err == nil {
+		if err := s.redis.SetEX(ctx, s.prefix+token, int(ttl/time.Second), string(payload)); err == nil {
 			redisOK = true
 		} else {
 			s.fallbackCount.Add(1)

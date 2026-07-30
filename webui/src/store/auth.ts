@@ -65,7 +65,7 @@ interface AuthState {
    */
   isHydrated: boolean;
   initialize: () => Promise<void>;
-  login: (username: string, password: string) => Promise<LoginResult>;
+  login: (username: string, password: string, remember?: boolean) => Promise<LoginResult>;
   logout: () => Promise<void>;
   fetchUser: (options?: { silent?: boolean }) => Promise<FetchUserResult>;
   setUser: (user: UserInfo | null) => void;
@@ -138,9 +138,9 @@ export const useAuthStore = create<AuthState>()(
         return inFlight.initialize;
       },
 
-      login: async (username: string, password: string) => {
+      login: async (username: string, password: string, remember = false) => {
         try {
-          const res = await api.login(username, password);
+          const res = await api.login(username, password, remember);
           if (res.success && res.data) {
             // 校验后端 user payload 的最小形状，
             // 失败时回退为登录失败 + 自定义 errorCode，避免污染 store。
@@ -280,4 +280,3 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
-

@@ -168,6 +168,7 @@
       "title": "进入 {site}",
       "description": "访问你的媒体控制台",
       "telegramCommunity": "Telegram 社群",
+      "rememberPassword": "记住密码（90 天免登录）",
       "submit": "立即登入",
       "forgotPassword": "忘记密码？",
       "noAccount": "还没有账号？",

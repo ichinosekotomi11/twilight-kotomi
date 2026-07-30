@@ -39,6 +39,7 @@ import (
 //   - 该端点是 AuthPublic，无 cookie，所以唯一可控维度是 IP；命中后返回
 //     RATE_LIMITED，前端走通用"稍后重试"路径，不暴露任何用户名差异。
 const checkAvailableRatePerMin = 30
+const rememberLoginTTL = 90 * 24 * time.Hour
 
 func (a *App) handleLogin(w http.ResponseWriter, r *http.Request, _ Params) {
 	if !a.allowRate(r.Context(), rateKey("login:", a.clientIP(r)), a.cfg().RateLimitLoginPerMinute, time.Minute) {
@@ -49,6 +50,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request, _ Params) {
 	username := stringValue(payload, "username")
 	email := stringValue(payload, "email")
 	password := stringValue(payload, "password")
+	remember := boolValue(payload, "remember", false)
 	if (username == "" && email == "") || password == "" {
 		failWithCode(w, http.StatusBadRequest, ErrAuthCredentialsEmpty, "用户名/邮箱和密码不能为空")
 		return
@@ -115,7 +117,11 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request, _ Params) {
 			_, _ = a.store().UpdateUser(u.UID, func(uu *store.User) error { uu.PasswordHash = h; return nil })
 		}
 	}
-	token, expires, err := a.sessions().Create(r.Context(), u.UID)
+	sessionTTL := time.Duration(0)
+	if remember {
+		sessionTTL = rememberLoginTTL
+	}
+	token, expires, err := a.sessions().CreateWithTTL(r.Context(), u.UID, sessionTTL)
 	if err != nil {
 		failWithCode(w, http.StatusInternalServerError, ErrSessionCreateFailed, "创建会话失败")
 		return

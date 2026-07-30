@@ -45,6 +45,21 @@ func (a *App) runRetentionExpiryJob(r *http.Request) (map[string]any, []string, 
 		}
 		if user.RetentionGraceUntil > 0 {
 			inc("checked")
+			if user.RetentionExpiredAt > nowUnix && !expiryIsPermanent(user.RetentionExpiredAt) {
+				if _, err := a.store().UpdateUser(user.UID, func(u *store.User) error {
+					u.ExpiredAt = u.RetentionExpiredAt
+					u.RetentionGraceUntil = 0
+					u.RetentionExpiredAt = 0
+					u.Active = true
+					return nil
+				}); err != nil {
+					inc("failed")
+					zap.L().Warn("retention grace recovery failed", zap.Int64("uid", user.UID), zap.Error(err))
+				} else {
+					inc("renewed")
+				}
+				continue
+			}
 			if renewed, err := a.tryRetentionRenew(r, user, cost, renewDays, now); err != nil {
 				inc("failed")
 				zap.L().Warn("retention grace renewal failed", zap.Int64("uid", user.UID), zap.Error(err))

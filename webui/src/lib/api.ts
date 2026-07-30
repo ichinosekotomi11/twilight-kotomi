@@ -217,14 +217,14 @@ class ApiClient {
   }
 
   // Auth
-  async login(username: string, password: string) {
+  async login(username: string, password: string, remember = false) {
     const isEmail = username.includes("@");
     const res = await this.request<{ user: Partial<UserInfo> }>("/auth/login", {
       method: "POST",
       body: JSON.stringify(
         isEmail
-          ? { email: username.trim(), username: "", password }
-          : { username, password },
+          ? { email: username.trim(), username: "", password, remember }
+          : { username, password, remember },
       ),
     });
     if (res.success && res.data?.user?.avatar) {

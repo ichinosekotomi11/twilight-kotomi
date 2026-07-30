@@ -261,6 +261,10 @@ func TestEmbyMonthlyPlaybackSummaryIncludesLiveSession(t *testing.T) {
 	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/Users/emby-cycle-live/Items" {
+			_, _ = w.Write([]byte(`{"Items":[]}`))
+			return
+		}
 		if r.URL.Path != "/Sessions" {
 			http.NotFound(w, r)
 			return
@@ -296,8 +300,8 @@ func TestEmbyMonthlyPlaybackSummaryIncludesLiveSession(t *testing.T) {
 		t.Fatalf("monthly playback after live session disappeared=%d want=1500", afterStop.Seconds)
 	}
 	for _, path := range paths {
-		if strings.Contains(path, "ActivityLog") || strings.Contains(path, "Items") {
-			t.Fatalf("summary should only read sessions, got path %s", path)
+		if strings.Contains(path, "ActivityLog") {
+			t.Fatalf("summary should not read activity log, got path %s", path)
 		}
 	}
 }
@@ -1145,7 +1149,12 @@ func TestSigninRenewalSpendsPointsWhenEnabled(t *testing.T) {
 		t.Fatal("missing test user")
 	}
 	expiresAt := time.Now().AddDate(0, 0, 1).Unix()
-	if _, err := app.store().UpdateUser(user.UID, func(u *store.User) error { u.ExpiredAt = expiresAt; return nil }); err != nil {
+	if _, err := app.store().UpdateUser(user.UID, func(u *store.User) error {
+		u.ExpiredAt = expiresAt
+		u.RetentionExpiredAt = expiresAt + 20*86400
+		u.RetentionGraceUntil = time.Now().AddDate(0, 0, 2).Unix()
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, created, err := app.store().AddSigninWithOptions(user.UID, 100, nil, true); err != nil || !created {
@@ -1167,6 +1176,9 @@ func TestSigninRenewalSpendsPointsWhenEnabled(t *testing.T) {
 	updated, _ := app.store().User(user.UID)
 	if updated.ExpiredAt < expiresAt+10*86400-2 || !updated.Active {
 		t.Fatalf("unexpected renewed user: %#v old_expiry=%d", updated, expiresAt)
+	}
+	if updated.RetentionGraceUntil != 0 || updated.RetentionExpiredAt != 0 {
+		t.Fatalf("renewal should clear retention grace fields, got grace=%d original=%d", updated.RetentionGraceUntil, updated.RetentionExpiredAt)
 	}
 	points := app.store().Signin(user.UID).Points
 	if points != 60 {
@@ -3671,6 +3683,63 @@ func TestEmbyPlaybackSecondsSinceIncludesLiveSession(t *testing.T) {
 	}
 }
 
+func TestSyncRecentEmbyPlaybackPersistsUserDataProgress(t *testing.T) {
+	app := newTestApp(t)
+	user, err := app.store().CreateUser(store.User{
+		Username:     "always",
+		Role:         store.RoleNormal,
+		Active:       true,
+		EmbyID:       "emby-yamby",
+		EmbyUsername: "山路",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/Users/emby-yamby/Items" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{
+			"Items":[{
+				"Id":"movie-yamby",
+				"Name":"Yamby Movie",
+				"Type":"Movie",
+				"RunTimeTicks":72000000000,
+				"UserData":{
+					"Played":false,
+					"PlayCount":0,
+					"LastPlayedDate":"2026-07-29T14:38:33.0000000Z",
+					"PlaybackPositionTicks":15000000000
+				}
+			}]
+		}`))
+	}))
+	defer emby.Close()
+	app.cfg().EmbyURL = emby.URL
+	app.cfg().EmbyToken = "test-token"
+
+	since := time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC)
+	result := app.syncRecentEmbyPlaybackForUser(context.Background(), user, since, 10)
+	if result.Inserted != 1 || result.Failed != 0 {
+		t.Fatalf("sync result = %#v, want one inserted", result)
+	}
+	records := app.store().PlaybackRecords(user.UID, 0, 10)
+	if len(records) != 1 {
+		t.Fatalf("records len = %d, want 1 (%#v)", len(records), records)
+	}
+	record := records[0]
+	if record.ItemID != "movie-yamby" || record.Duration != 1500 || record.PlayedAt != 1785335913 {
+		t.Fatalf("record = %#v, want yamby progress at Emby LastPlayedDate", record)
+	}
+	if len(paths) != 1 || paths[0] != "/Users/emby-yamby/Items" {
+		t.Fatalf("unexpected Emby paths: %#v", paths)
+	}
+}
+
 // TestBangumiWebhookConstantTimeStringEqual 锁定 R58-1 timing oracle 收紧:
 // length-mismatch 不能再通过 ConstantTimeCompare 提前 return 触发。直接调
 // 用 helper 验证逻辑等价性(timing 行为靠 zero-pad 实现,Go 测试框架不便
@@ -6070,6 +6139,55 @@ func TestCheckExpiredSkipsAdminAndWhitelist(t *testing.T) {
 	got := int(numeric(summary["skipped_protected"]))
 	if got != 3 {
 		t.Fatalf("skipped_protected=%d in summary, want 3; summary=%v", got, summary)
+	}
+}
+
+func TestRetentionGraceUsesFutureRetainedExpiryWithoutSpendingPoints(t *testing.T) {
+	app := newTestApp(t)
+	app.cfg().RetentionEnabled = true
+	app.cfg().SigninRenewalCost = 70
+	app.cfg().SigninRenewalDays = 30
+
+	now := time.Now()
+	graceUntil := now.AddDate(0, 0, 2).Unix()
+	retainedExpiry := now.AddDate(0, 0, 27).Unix()
+	user, err := app.store().CreateUser(store.User{
+		Username:            "retention-recovered",
+		Role:                store.RoleNormal,
+		Active:              true,
+		EmbyID:              "emby-retention-recovered",
+		ExpiredAt:           graceUntil,
+		RetentionGraceUntil: graceUntil,
+		RetentionExpiredAt:  retainedExpiry,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, created, err := app.store().AddSigninWithOptions(user.UID, 27, nil, true); err != nil || !created {
+		t.Fatalf("seed signin points created=%v err=%v", created, err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/scheduler/internal", nil)
+	summary, _, err := app.runSchedulerJob(req, "check_expired")
+	if err != nil {
+		t.Fatalf("runSchedulerJob check_expired: %v", err)
+	}
+
+	updated, ok := app.store().User(user.UID)
+	if !ok {
+		t.Fatal("user disappeared")
+	}
+	if updated.ExpiredAt != retainedExpiry {
+		t.Fatalf("retention recovery should restore retained expiry %d, got %d", retainedExpiry, updated.ExpiredAt)
+	}
+	if updated.RetentionGraceUntil != 0 || updated.RetentionExpiredAt != 0 {
+		t.Fatalf("retention recovery should clear grace fields, got grace=%d original=%d", updated.RetentionGraceUntil, updated.RetentionExpiredAt)
+	}
+	if points := app.store().Signin(user.UID).Points; points != 27 {
+		t.Fatalf("retention recovery should not spend points, got %d", points)
+	}
+	if int(numeric(summary["renewed"])) != 1 {
+		t.Fatalf("expected recovered user to count as renewed, summary=%v", summary)
 	}
 }
 

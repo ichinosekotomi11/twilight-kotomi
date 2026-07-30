@@ -41,7 +41,7 @@ func (a *App) sendExpiryReminders(ctx context.Context, days int) map[string]any 
 	consecutiveRateLimited := 0
 	first := true
 	for _, u := range a.store().ListUsers() {
-		if u.Active && u.ExpiredAt > now && u.ExpiredAt <= deadline {
+		if userShouldReceiveExpiryReminder(u, now, deadline) {
 			remaining := u.ExpiredAt - now
 			item := map[string]any{"uid": u.UID, "username": u.Username, "telegram_id": nullableInt(u.TelegramID), "expired_at": u.ExpiredAt, "remaining_seconds": remaining, "remaining_str": formatSeconds(remaining)}
 			users = append(users, item)
@@ -160,7 +160,7 @@ func (a *App) runSchedulerJob(r *http.Request, jobID string) (map[string]any, []
 			if err := r.Context().Err(); err != nil {
 				return map[string]any{"success": false, "terminated": true, "expiring": count, "days": days}, []string{"job terminated"}, err
 			}
-			if u.Active && u.ExpiredAt > now && u.ExpiredAt <= deadline {
+			if userShouldReceiveExpiryReminder(u, now, deadline) {
 				count++
 			}
 		}
@@ -247,7 +247,20 @@ func (a *App) runSchedulerJob(r *http.Request, jobID string) (map[string]any, []
 				active++
 			}
 		}
-		return map[string]any{"success": true, "active": active, "total": len(sessions), "expired_sessions": expiredSessions, "expired_email_codes": expiredEmailCodes, "cleared_unverified_emails": staleCleared}, []string{fmt.Sprintf("read %d Emby sessions", len(sessions)), fmt.Sprintf("cleaned up %d expired sessions", expiredSessions), fmt.Sprintf("cleaned up %d expired email codes", expiredEmailCodes), fmt.Sprintf("cleared %d stale unverified emails", staleCleared)}, nil
+		playbackSync := a.syncRecentEmbyPlaybackForUsers(r.Context(), a.store().ListUsers(), time.Now().Add(-48*time.Hour), embyRecentPlaybackDefaultLimit)
+		return map[string]any{
+				"success": true, "active": active, "total": len(sessions), "expired_sessions": expiredSessions,
+				"expired_email_codes": expiredEmailCodes, "cleared_unverified_emails": staleCleared,
+				"recent_playback_checked": playbackSync.Checked, "recent_playback_inserted": playbackSync.Inserted,
+				"recent_playback_updated": playbackSync.Updated, "recent_playback_skipped": playbackSync.Skipped,
+				"recent_playback_failed": playbackSync.Failed,
+			}, []string{
+				fmt.Sprintf("read %d Emby sessions", len(sessions)),
+				fmt.Sprintf("synced %d recent playback records", playbackSync.changed()),
+				fmt.Sprintf("cleaned up %d expired sessions", expiredSessions),
+				fmt.Sprintf("cleaned up %d expired email codes", expiredEmailCodes),
+				fmt.Sprintf("cleared %d stale unverified emails", staleCleared),
+			}, nil
 	case "emby_sync":
 		if !a.embyConfigured() {
 			return map[string]any{"success": true, "configured": false}, []string{"Emby not configured"}, nil
@@ -618,6 +631,10 @@ func (a *App) runSchedulerJob(r *http.Request, jobID string) (map[string]any, []
 	default:
 		return map[string]any{"success": false}, nil, fmt.Errorf("unknown scheduler job: %s", jobID)
 	}
+}
+
+func userShouldReceiveExpiryReminder(u store.User, now, deadline int64) bool {
+	return u.Role == store.RoleNormal && u.Active && u.ExpiredAt > now && u.ExpiredAt <= deadline
 }
 
 func schedulerRequestParams(r *http.Request) map[string]any {

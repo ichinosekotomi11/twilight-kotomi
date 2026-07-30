@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2, Send } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/store/auth";
@@ -40,6 +41,7 @@ export default function LoginPage() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -74,7 +76,7 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      const result = await login(username, password);
+      const result = await login(username, password, remember);
       if (result.ok) {
         toast({
           title: t("auth.login.successTitle"),
@@ -167,6 +169,15 @@ export default function LoginPage() {
             autoComplete="current-password"
           />
         </div>
+
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-[#3f3a63] drop-shadow-[0_1px_4px_rgba(255,255,255,0.65)]">
+          <Checkbox
+            checked={remember}
+            onCheckedChange={(checked) => setRemember(checked === true)}
+            aria-label={t("auth.login.rememberPassword")}
+          />
+          <span>{t("auth.login.rememberPassword")}</span>
+        </label>
 
         <AuthPrimaryButton type="submit" disabled={isLoading}>
           {isLoading ? (
