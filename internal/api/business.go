@@ -244,10 +244,10 @@ func markRegistrationGrant(u *store.User, source, code string) {
 	source = strings.TrimSpace(source)
 	code = strings.TrimSpace(code)
 	u.EmbyGrantLocked = true
-	if source != "" && u.RegistrationSource == "" {
+	if source != "" {
 		u.RegistrationSource = source
 	}
-	if code != "" && u.RegistrationCode == "" {
+	if code != "" {
 		u.RegistrationCode = code
 	}
 }

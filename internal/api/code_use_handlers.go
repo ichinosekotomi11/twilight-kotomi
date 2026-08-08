@@ -50,7 +50,7 @@ func (a *App) handleUseCode(w http.ResponseWriter, r *http.Request, _ Params) {
 		failWithCode(w, http.StatusBadRequest, ErrCodeAlreadyEmbyBound, "当前账号已绑定 Emby，请使用续期码")
 		return
 	}
-	if grantsEmby && p.User.EmbyID == "" && !p.User.PendingEmby && a.userHasEmbyGrantHistory(p.User) {
+	if grantsEmby && source != "regcode" && p.User.EmbyID == "" && !p.User.PendingEmby && a.userHasEmbyGrantHistory(p.User) {
 		failWithCode(w, http.StatusBadRequest, ErrCodeRegistrationGrantAlreadyUsed, "当前账号已经使用过 Emby 注册资格，不能重复使用注册码或邀请码")
 		return
 	}
@@ -128,7 +128,7 @@ func (a *App) handleUseCode(w http.ResponseWriter, r *http.Request, _ Params) {
 		}
 	}
 	updateUser := func(u *store.User, reg store.RegCode) error {
-		if grantsEmby && u.EmbyID == "" && u.EmbyGrantLocked && !p.User.PendingEmby {
+		if grantsEmby && source != "regcode" && u.EmbyID == "" && u.EmbyGrantLocked && !p.User.PendingEmby {
 			return store.ErrGrantLocked
 		}
 		if replacesPendingEntitlement {

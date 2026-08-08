@@ -4480,7 +4480,7 @@ func TestRegisterCodeLimitConsumesRegcodeAtomically(t *testing.T) {
 	}
 }
 
-func TestRegcodeGrantHistoryAllowsSelfUnbindButBlocksRepeatRegistrationGrant(t *testing.T) {
+func TestRegcodeGrantHistoryAllowsSelfUnbindAndRepeatRegistrationGrant(t *testing.T) {
 	app := newTestApp(t)
 	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -4523,12 +4523,16 @@ func TestRegcodeGrantHistoryAllowsSelfUnbindButBlocksRepeatRegistrationGrant(t *
 	req = req.WithContext(context.WithValue(req.Context(), principalKey, principal{User: currentUser}))
 	rr = httptest.NewRecorder()
 	app.handleUseCode(rr, req, nil)
-	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), `"error_code":"CODE_REGISTRATION_GRANT_ALREADY_USED"`) {
-		t.Fatalf("grant-backed user should not use another register code, status=%d body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("grant-backed unbound user should use another register code, status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	currentUser, _ = app.store().User(user.UID)
+	if !currentUser.PendingEmby || currentUser.PendingEmbyDays == nil || *currentUser.PendingEmbyDays != 30 || currentUser.RegistrationCode != "REG-NEW-GRANT" {
+		t.Fatalf("repeat register code should replace pending grant: %#v days=%#v", currentUser, currentUser.PendingEmbyDays)
 	}
 	reg, _ := app.store().RegCode("REG-NEW-GRANT")
-	if reg.UseCount != 0 || !reg.Active {
-		t.Fatalf("blocked repeat register code was consumed: %#v", reg)
+	if reg.UseCount != 1 || reg.UsedBy != user.UID || reg.Active {
+		t.Fatalf("repeat register code usage was not recorded: %#v", reg)
 	}
 }
 
