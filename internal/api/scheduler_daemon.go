@@ -397,11 +397,11 @@ func (a *App) schedulerDefaultTriggerSpec(jobID string) map[string]any {
 	case "daily_stats":
 		return dailySpec(a.cfg().SchedulerDailyStatsTime, 0, 5)
 	case "telegram_media_rank_daily":
-		return dailySpec(a.cfg().TelegramStatsMediaRankDailyTime, 20, 0)
+		return dailySpec(a.cfg().TelegramStatsMediaRankDailyTime, 21, 0)
 	case "telegram_media_rank_weekly":
-		return dailySpec(a.cfg().TelegramStatsMediaRankWeeklyTime, 20, 0)
+		return dailySpec(a.cfg().TelegramStatsMediaRankWeeklyTime, 21, 0)
 	case "telegram_media_rank_monthly":
-		return dailySpec(a.cfg().TelegramStatsMediaRankMonthlyTime, 20, 0)
+		return dailySpec(a.cfg().TelegramStatsMediaRankMonthlyTime, 21, 0)
 	case "telegram_user_minutes_daily":
 		return dailySpec(a.cfg().TelegramStatsUserMinutesRankDailyTime, 21, 0)
 	case "telegram_user_minutes_weekly":

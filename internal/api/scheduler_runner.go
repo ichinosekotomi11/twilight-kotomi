@@ -172,20 +172,22 @@ func (a *App) runSchedulerJob(r *http.Request, jobID string) (map[string]any, []
 		if !a.telegramStatsPushEnabled() {
 			return map[string]any{"success": true, "enabled": false, "reason": "telegram stats push disabled"}, []string{"telegram stats push disabled"}, nil
 		}
+		now := time.Now()
 		period := embyStatsPeriodDaily
-		title := "📺 Emby 今日播放榜"
+		title := "📺 Emby 每日播放榜"
 		switch jobID {
 		case "telegram_media_rank_weekly":
 			period = embyStatsPeriodWeekly
-			title = "📺 Emby 本周播放榜"
+			title = "📺 Emby 每周播放榜"
 		case "telegram_media_rank_monthly":
 			period = embyStatsPeriodMonthly
-			title = "📺 Emby 本月播放榜"
+			title = "📺 Emby 每月播放榜"
 		}
-		if !a.shouldSendPeriodicStats(period, time.Now()) {
+		if !a.shouldSendPeriodicStats(period, now) {
 			return map[string]any{"success": true, "enabled": true, "skipped": true, "period": period}, []string{"skip: not in scheduled calendar window"}, nil
 		}
-		window, seriesTop, movieTop, _ := a.embyStatsData(r.Context(), period, time.Now(), 0)
+		result := a.embyStatsDataForWindow(r.Context(), a.telegramStatsSettlementWindow(period, now), now, 0)
+		window, seriesTop, movieTop := result.Window, result.SeriesTop, result.MovieTop
 		text := formatEmbyRankMessage(title, "电影 TOP "+strconv.Itoa(a.embyStatsTopLimit(0)), "电视剧 TOP "+strconv.Itoa(a.embyStatsTopLimit(0)), movieTop, seriesTop)
 		if err := a.telegramSendMessage(r.Context(), a.telegramStatsPushChatID(), text); err != nil {
 			return map[string]any{"success": false, "period": period, "start_at": window.Start.Unix(), "end_at": window.End.Unix()}, nil, err
@@ -195,20 +197,22 @@ func (a *App) runSchedulerJob(r *http.Request, jobID string) (map[string]any, []
 		if !a.telegramStatsPushEnabled() {
 			return map[string]any{"success": true, "enabled": false, "reason": "telegram stats push disabled"}, []string{"telegram stats push disabled"}, nil
 		}
+		now := time.Now()
 		period := embyStatsPeriodDaily
-		title := "⏱ Emby 今日用户播放时长榜"
+		title := "⏱ Emby 每日用户播放时长榜"
 		switch jobID {
 		case "telegram_user_minutes_weekly":
 			period = embyStatsPeriodWeekly
-			title = "⏱ Emby 本周用户播放时长榜"
+			title = "⏱ Emby 每周用户播放时长榜"
 		case "telegram_user_minutes_monthly":
 			period = embyStatsPeriodMonthly
-			title = "⏱ Emby 本月用户播放时长榜"
+			title = "⏱ Emby 每月用户播放时长榜"
 		}
-		if !a.shouldSendPeriodicStats(period, time.Now()) {
+		if !a.shouldSendPeriodicStats(period, now) {
 			return map[string]any{"success": true, "enabled": true, "skipped": true, "period": period}, []string{"skip: not in scheduled calendar window"}, nil
 		}
-		window, _, _, items := a.embyStatsData(r.Context(), period, time.Now(), 0)
+		result := a.embyStatsDataForWindow(r.Context(), a.telegramStatsSettlementWindow(period, now), now, 0)
+		window, items := result.Window, result.UserMinutes
 		text := formatEmbyUserMinutesMessage(title, items)
 		if err := a.telegramSendMessage(r.Context(), a.telegramStatsPushChatID(), text); err != nil {
 			return map[string]any{"success": false, "period": period, "start_at": window.Start.Unix(), "end_at": window.End.Unix()}, nil, err

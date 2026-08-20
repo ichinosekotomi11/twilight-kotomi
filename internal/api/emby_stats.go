@@ -163,6 +163,10 @@ func (a *App) embyStatsData(ctx context.Context, period string, now time.Time, l
 
 func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time.Time, limit int) embyStatsResult {
 	window := a.embyStatsWindow(period, now)
+	return a.embyStatsDataForWindow(ctx, window, now, limit)
+}
+
+func (a *App) embyStatsDataForWindow(ctx context.Context, window embyStatsWindow, now time.Time, limit int) embyStatsResult {
 	limit = a.embyStatsTopLimit(limit)
 	cacheKey := fmt.Sprintf("%s|%d|%d", window.Period, window.Start.Unix(), limit)
 	records := a.store().PlaybackRecords(0, window.Start.Unix(), 10000)
@@ -272,6 +276,35 @@ func (a *App) embyStatsDataDetailed(ctx context.Context, period string, now time
 	)
 	a.storeEmbyStats(cacheKey, result, now)
 	return result
+}
+
+func (a *App) telegramStatsSettlementWindow(period string, now time.Time) embyStatsWindow {
+	loc := a.embyStatsLocation()
+	now = now.In(loc)
+	settlementToday := time.Date(now.Year(), now.Month(), now.Day(), 21, 0, 0, 0, loc)
+	switch strings.ToLower(strings.TrimSpace(period)) {
+	case embyStatsPeriodWeekly:
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		thisWeekSettlement := time.Date(now.Year(), now.Month(), now.Day(), 21, 0, 0, 0, loc).AddDate(0, 0, -(weekday - 1))
+		if now.Before(thisWeekSettlement) {
+			thisWeekSettlement = thisWeekSettlement.AddDate(0, 0, -7)
+		}
+		return embyStatsWindow{Period: embyStatsPeriodWeekly, Start: thisWeekSettlement.AddDate(0, 0, -7), End: thisWeekSettlement, Title: "上周"}
+	case embyStatsPeriodMonthly:
+		thisMonthSettlement := time.Date(now.Year(), now.Month(), 1, 21, 0, 0, 0, loc)
+		if now.Before(thisMonthSettlement) {
+			thisMonthSettlement = thisMonthSettlement.AddDate(0, -1, 0)
+		}
+		return embyStatsWindow{Period: embyStatsPeriodMonthly, Start: thisMonthSettlement.AddDate(0, -1, 0), End: thisMonthSettlement, Title: "上月"}
+	default:
+		if now.Before(settlementToday) {
+			settlementToday = settlementToday.AddDate(0, 0, -1)
+		}
+		return embyStatsWindow{Period: embyStatsPeriodDaily, Start: settlementToday.AddDate(0, 0, -1), End: settlementToday, Title: "每日"}
+	}
 }
 
 func (a *App) embyLivePlaybackRecords(ctx context.Context, now time.Time) []store.PlaybackRecord {
@@ -717,12 +750,12 @@ func (a *App) telegramStatsPushEnabled() bool {
 }
 
 func (a *App) shouldSendPeriodicStats(period string, now time.Time) bool {
-	window := a.embyStatsWindow(period, now)
+	window := a.telegramStatsSettlementWindow(period, now)
 	switch window.Period {
 	case embyStatsPeriodWeekly:
-		return now.In(window.Start.Location()).Weekday() == time.Sunday
+		return now.In(window.Start.Location()).Weekday() == time.Monday
 	case embyStatsPeriodMonthly:
-		return now.In(window.Start.Location()).AddDate(0, 0, 1).Month() != now.In(window.Start.Location()).Month()
+		return now.In(window.Start.Location()).Day() == 1
 	default:
 		return true
 	}

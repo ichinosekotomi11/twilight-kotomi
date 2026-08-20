@@ -3646,6 +3646,87 @@ func TestEmbyStatsMergeLiveSessionsWithoutActivityLogOrLocalWrites(t *testing.T)
 	}
 }
 
+func TestTelegramStatsSettlementWindowUsesTwentyOneOClockBoundary(t *testing.T) {
+	app := newTestApp(t)
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name      string
+		period    string
+		now       time.Time
+		wantStart time.Time
+		wantEnd   time.Time
+		wantTitle string
+	}{
+		{
+			name:      "daily after settlement",
+			period:    embyStatsPeriodDaily,
+			now:       time.Date(2026, 8, 20, 21, 5, 0, 0, loc),
+			wantStart: time.Date(2026, 8, 19, 21, 0, 0, 0, loc),
+			wantEnd:   time.Date(2026, 8, 20, 21, 0, 0, 0, loc),
+			wantTitle: "每日",
+		},
+		{
+			name:      "daily before settlement",
+			period:    embyStatsPeriodDaily,
+			now:       time.Date(2026, 8, 20, 20, 59, 0, 0, loc),
+			wantStart: time.Date(2026, 8, 18, 21, 0, 0, 0, loc),
+			wantEnd:   time.Date(2026, 8, 19, 21, 0, 0, 0, loc),
+			wantTitle: "每日",
+		},
+		{
+			name:      "weekly monday settlement",
+			period:    embyStatsPeriodWeekly,
+			now:       time.Date(2026, 8, 17, 21, 5, 0, 0, loc),
+			wantStart: time.Date(2026, 8, 10, 21, 0, 0, 0, loc),
+			wantEnd:   time.Date(2026, 8, 17, 21, 0, 0, 0, loc),
+			wantTitle: "上周",
+		},
+		{
+			name:      "monthly first day settlement",
+			period:    embyStatsPeriodMonthly,
+			now:       time.Date(2026, 8, 1, 21, 5, 0, 0, loc),
+			wantStart: time.Date(2026, 7, 1, 21, 0, 0, 0, loc),
+			wantEnd:   time.Date(2026, 8, 1, 21, 0, 0, 0, loc),
+			wantTitle: "上月",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			window := app.telegramStatsSettlementWindow(tt.period, tt.now)
+			if !window.Start.Equal(tt.wantStart) || !window.End.Equal(tt.wantEnd) || window.Title != tt.wantTitle {
+				t.Fatalf("window = start %s end %s title %q, want start %s end %s title %q", window.Start, window.End, window.Title, tt.wantStart, tt.wantEnd, tt.wantTitle)
+			}
+		})
+	}
+}
+
+func TestShouldSendPeriodicStatsUsesSettlementCalendar(t *testing.T) {
+	app := newTestApp(t)
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !app.shouldSendPeriodicStats(embyStatsPeriodDaily, time.Date(2026, 8, 20, 21, 0, 0, 0, loc)) {
+		t.Fatal("daily stats should be eligible every day")
+	}
+	if !app.shouldSendPeriodicStats(embyStatsPeriodWeekly, time.Date(2026, 8, 17, 21, 0, 0, 0, loc)) {
+		t.Fatal("weekly stats should be eligible on Monday settlement day")
+	}
+	if app.shouldSendPeriodicStats(embyStatsPeriodWeekly, time.Date(2026, 8, 16, 21, 0, 0, 0, loc)) {
+		t.Fatal("weekly stats should not be eligible before Monday settlement day")
+	}
+	if !app.shouldSendPeriodicStats(embyStatsPeriodMonthly, time.Date(2026, 8, 1, 21, 0, 0, 0, loc)) {
+		t.Fatal("monthly stats should be eligible on the first day settlement")
+	}
+	if app.shouldSendPeriodicStats(embyStatsPeriodMonthly, time.Date(2026, 8, 2, 21, 0, 0, 0, loc)) {
+		t.Fatal("monthly stats should not be eligible after the first day settlement")
+	}
+}
+
 func TestEmbyPlaybackSecondsSinceIncludesLiveSession(t *testing.T) {
 	app := newTestApp(t)
 	_, err := app.store().CreateUser(store.User{
