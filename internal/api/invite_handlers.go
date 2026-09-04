@@ -378,7 +378,7 @@ func (a *App) handleInviteUse(w http.ResponseWriter, r *http.Request, _ Params) 
 		failWithCode(w, http.StatusBadRequest, ErrInviteAlreadyHasParent, "当前账号已存在邀请上级，不能重复加入邀请树")
 		return
 	}
-	if !user.PendingEmby && a.userHasEmbyGrantHistory(user) {
+	if user.PendingEmby || a.userHasEmbyGrantHistory(user) {
 		failWithCode(w, http.StatusBadRequest, ErrCodeRegistrationGrantAlreadyUsed, "当前账号已经使用过 Emby 注册资格，不能重复使用邀请码")
 		return
 	}
@@ -412,7 +412,7 @@ func (a *App) handleInviteUse(w http.ResponseWriter, r *http.Request, _ Params) 
 		return
 	}
 	u, _, err := a.store().ConsumeInviteCodeAndUpdateUser(code, user.UID, a.cfg().InviteMaxDepth, a.cfg().InviteRootUserLimit, func(u *store.User, _ store.InviteCode) error {
-		if u.EmbyID == "" && u.EmbyGrantLocked && !user.PendingEmby {
+		if u.EmbyID == "" && (u.PendingEmby || u.EmbyGrantLocked) {
 			return store.ErrGrantLocked
 		}
 		u.EmbyUsername = firstNonEmpty(stringValue(payload, "emby_username"), u.Username)

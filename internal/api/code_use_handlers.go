@@ -50,7 +50,7 @@ func (a *App) handleUseCode(w http.ResponseWriter, r *http.Request, _ Params) {
 		failWithCode(w, http.StatusBadRequest, ErrCodeAlreadyEmbyBound, "当前账号已绑定 Emby，请使用续期码")
 		return
 	}
-	if grantsEmby && source != "regcode" && p.User.EmbyID == "" && !p.User.PendingEmby && a.userHasEmbyGrantHistory(p.User) {
+	if grantsEmby && p.User.EmbyID == "" && (p.User.PendingEmby || a.userHasEmbyGrantHistory(p.User)) {
 		failWithCode(w, http.StatusBadRequest, ErrCodeRegistrationGrantAlreadyUsed, "当前账号已经使用过 Emby 注册资格，不能重复使用注册码或邀请码")
 		return
 	}
@@ -61,10 +61,9 @@ func (a *App) handleUseCode(w http.ResponseWriter, r *http.Request, _ Params) {
 	if source == "regcode" && a.rejectRegcodeWriteIfStorageMismatch(w) {
 		return
 	}
-	replacesPendingEntitlement := source == "regcode" && p.User.EmbyID == "" && p.User.PendingEmby && codeGrantsEmbyRegistration(source, codeType)
 	var inviteForUse store.InviteCode
 	var inviterForUse store.User
-	if grantsEmby && p.User.EmbyID == "" && !replacesPendingEntitlement {
+	if grantsEmby && p.User.EmbyID == "" {
 		excludeRegCode := ""
 		excludeInviteCode := ""
 		if source == "regcode" {
@@ -128,12 +127,8 @@ func (a *App) handleUseCode(w http.ResponseWriter, r *http.Request, _ Params) {
 		}
 	}
 	updateUser := func(u *store.User, reg store.RegCode) error {
-		if grantsEmby && source != "regcode" && u.EmbyID == "" && u.EmbyGrantLocked && !p.User.PendingEmby {
+		if grantsEmby && u.EmbyID == "" && (u.PendingEmby || u.EmbyGrantLocked) {
 			return store.ErrGrantLocked
-		}
-		if replacesPendingEntitlement {
-			u.PendingEmby = false
-			u.PendingEmbyDays = nil
 		}
 		if source == "regcode" {
 			switch reg.Type {
