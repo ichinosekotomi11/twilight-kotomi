@@ -4561,7 +4561,7 @@ func TestRegisterCodeLimitConsumesRegcodeAtomically(t *testing.T) {
 	}
 }
 
-func TestRegcodeGrantHistoryBlocksRepeatRegistrationGrantAfterSelfUnbind(t *testing.T) {
+func TestRegcodeGrantHistoryAllowsRepeatRegistrationGrantAfterSelfUnbind(t *testing.T) {
 	app := newTestApp(t)
 	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -4604,16 +4604,16 @@ func TestRegcodeGrantHistoryBlocksRepeatRegistrationGrantAfterSelfUnbind(t *test
 	req = req.WithContext(context.WithValue(req.Context(), principalKey, principal{User: currentUser}))
 	rr = httptest.NewRecorder()
 	app.handleUseCode(rr, req, nil)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("grant-backed unbound user should not reuse register code, status=%d body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("grant-backed unbound user should reuse register code, status=%d body=%s", rr.Code, rr.Body.String())
 	}
 	currentUser, _ = app.store().User(user.UID)
-	if currentUser.PendingEmby || currentUser.PendingEmbyDays != nil || currentUser.RegistrationCode != "REG-OLD" {
-		t.Fatalf("rejected repeat register code should not alter pending grant state: %#v days=%#v", currentUser, currentUser.PendingEmbyDays)
+	if !currentUser.PendingEmby || currentUser.PendingEmbyDays == nil || *currentUser.PendingEmbyDays != 30 || currentUser.RegistrationCode != "REG-NEW-GRANT" {
+		t.Fatalf("repeat register code should replace pending grant: %#v days=%#v", currentUser, currentUser.PendingEmbyDays)
 	}
 	reg, _ := app.store().RegCode("REG-NEW-GRANT")
-	if reg.UseCount != 0 || reg.UsedBy != 0 || !reg.Active {
-		t.Fatalf("rejected repeat register code should not be consumed: %#v", reg)
+	if reg.UseCount != 1 || reg.UsedBy != user.UID || reg.Active {
+		t.Fatalf("repeat register code usage was not recorded: %#v", reg)
 	}
 }
 
@@ -5320,16 +5320,16 @@ func TestPendingEmbyUserCannotReplaceEntitlementWithRegisterCode(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), principalKey, principal{User: user}))
 	rr := httptest.NewRecorder()
 	app.handleUseCode(rr, req, nil)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("pending entitlement replacement should be rejected, status=%d body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("pending entitlement replacement should use register code, status=%d body=%s", rr.Code, rr.Body.String())
 	}
 	updated, _ := app.store().User(user.UID)
-	if !updated.PendingEmby || updated.PendingEmbyDays == nil || *updated.PendingEmbyDays != 90 || updated.EmbyUsername != "old-name" {
-		t.Fatalf("rejected register code should not replace pending entitlement: %#v days=%#v", updated, updated.PendingEmbyDays)
+	if !updated.PendingEmby || updated.PendingEmbyDays == nil || *updated.PendingEmbyDays != 7 || updated.EmbyUsername != "new-name" {
+		t.Fatalf("register code did not replace pending entitlement cleanly: %#v days=%#v", updated, updated.PendingEmbyDays)
 	}
 	reg, _ := app.store().RegCode("REG-REPLACE")
-	if reg.UseCount != 0 || reg.UsedBy != 0 || !reg.Active {
-		t.Fatalf("rejected register code should not be consumed: %#v", reg)
+	if reg.UseCount != 1 || reg.UsedBy != user.UID {
+		t.Fatalf("register code usage was not recorded: %#v", reg)
 	}
 }
 
