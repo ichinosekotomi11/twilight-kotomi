@@ -328,8 +328,9 @@ func signinDailyPoints(cfg config.Config) int {
 		return min
 	}
 	if min == 1 && max == 10 {
-		// 1..10 的均匀分布均值是 5.5。这里给 1 和 4 轻微加权，让长期均值稳定在 5。
-		weights := []int{2, 1, 1, 2, 1, 1, 1, 1, 1, 1}
+		// 1..10 的基础权重各为 1，再给 5 额外一份权重：
+		// 总权重 12、加权总和 60，因此理论平均值正好为 5。
+		weights := []int{1, 1, 1, 1, 2, 1, 1, 1, 1, 1}
 		total := 0
 		for _, weight := range weights {
 			total += weight

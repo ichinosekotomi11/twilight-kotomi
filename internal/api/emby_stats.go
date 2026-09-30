@@ -600,7 +600,9 @@ func embyPlaybackEventsFromActivity(entries []embyActivityLogEntry, start, end t
 }
 
 func (a *App) embyLinesPayload(u store.User) map[string]any {
-	if u.Role == store.RoleNormal && u.EmbyID == "" && !u.PendingEmby {
+	// 普通用户必须先绑定 Emby 才能获取线路。待开通资格只代表可以继续
+	// 完成开通流程，不能提前暴露媒体线路。
+	if u.Role == store.RoleNormal && u.EmbyID == "" {
 		return map[string]any{"lines": []any{}, "whitelist_lines": []any{}, "requires_emby_account": true, "requires_renewal": false, "emby_disabled_by_expiry": false}
 	}
 	if u.Role == store.RoleNormal && u.ExpiredAt > 0 && u.ExpiredAt < time.Now().Unix() {

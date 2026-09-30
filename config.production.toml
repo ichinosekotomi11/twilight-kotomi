@@ -250,8 +250,8 @@ auto_cleanup_no_emby_days = 7
 # 其余字段保持原名（currency_name / daily_min / ...）。
 signin_enabled = true
 currency_name = "星币"
-daily_min = 5
-daily_max = 20
+daily_min = 1
+daily_max = 10
 streak_bonus_enabled = true
 streak_bonus_days = [3, 7, 14, 30]
 streak_bonus_points = [10, 50, 100, 300]
